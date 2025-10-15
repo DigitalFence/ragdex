@@ -295,10 +295,15 @@ class OCRManager:
 if __name__ == "__main__":
     # Test/utility mode
     import argparse
-    
+    import sys
+
+    # Add parent directory to path to import config
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from personal_doc_library.core.config import config as default_config
+
     parser = argparse.ArgumentParser(description="OCR Manager for Personal Document Library")
-    parser.add_argument('--books-dir', default=os.environ.get('PERSONAL_LIBRARY_DOC_PATH', '/Users/hpoliset/SpiritualLibrary'))
-    parser.add_argument('--db-dir', default=os.environ.get('PERSONAL_LIBRARY_DB_PATH', '/Users/hpoliset/DocumentIndexerMCP/chroma_db'))
+    parser.add_argument('--books-dir', default=str(default_config.books_directory))
+    parser.add_argument('--db-dir', default=str(default_config.db_directory))
     parser.add_argument('--check', help="Check if file has been OCR'd", metavar='FILE')
     parser.add_argument('--process', help="Process OCR for a file", metavar='FILE')
     parser.add_argument('--list-candidates', action='store_true', help="List OCR candidates from failed PDFs")

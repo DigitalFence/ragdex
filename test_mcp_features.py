@@ -4,9 +4,15 @@
 import json
 import subprocess
 import sys
+import os
+from pathlib import Path
 
 def send_request(request):
     """Send a request to the MCP server and get response"""
+    # Get project root dynamically
+    project_root = Path(__file__).resolve().parent
+    src_path = project_root / "src"
+
     cmd = [
         "venv_mcp/bin/python", "-m",
         "personal_doc_library.servers.mcp_complete_server"
@@ -19,7 +25,7 @@ def send_request(request):
         stderr=subprocess.PIPE,
         text=True,
         env={
-            "PYTHONPATH": "/Users/hpoliset/DocumentIndexerMCP/src",
+            "PYTHONPATH": str(src_path),
             "CHROMA_TELEMETRY": "false"
         }
     )

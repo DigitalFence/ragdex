@@ -34,6 +34,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import psutil
 import threading
 from collections import OrderedDict
+import difflib
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1763,50 +1764,145 @@ class SharedRAG:
         # This method is kept for backward compatibility but no longer used
         # Claude will synthesize the raw results directly
         return "Direct results provided - synthesis to be done by Claude for article writing."
-    
-    def extract_pages(self, book_pattern, pages):
-        """Extract specific pages from a book
-        
+
+    def find_book_by_fuzzy_match(self, book_pattern, cutoff=0.6):
+        """Find book(s) using fuzzy matching
+
         Args:
-            book_pattern: Partial book name to match (case-insensitive)
-            pages: Can be:
-                - int: Single page number
-                - list[int]: List of page numbers
-                - str: Page range like "10-15"
-        
+            book_pattern: Partial or fuzzy book name to match
+            cutoff: Similarity threshold (0.0-1.0), default 0.6
+
         Returns:
-            dict with book info and extracted pages
+            tuple: (matched_books, exact_match_found, similarity_scores)
         """
-        # Find matching book
         book_pattern_lower = book_pattern.lower()
-        matching_books = []
-        
-        for book_path in self.book_index.keys():
+        all_books = list(self.book_index.keys())
+
+        # First try exact substring match (case-insensitive)
+        exact_matches = []
+        for book_path in all_books:
             book_path_lower = book_path.lower()
-            # Try exact match first
-            if book_path_lower.endswith(book_pattern_lower) or book_path_lower.endswith(book_pattern_lower + '.pdf'):
-                matching_books = [book_path]
-                break
-            # Otherwise do partial match
-            elif book_pattern_lower in book_path_lower:
-                matching_books.append(book_path)
-        
+            book_name_lower = os.path.basename(book_path).lower()
+
+            # Try exact match on full path or just filename
+            if book_pattern_lower == book_path_lower or book_pattern_lower == book_name_lower:
+                return ([book_path], True, {book_path: 1.0})
+
+            # Try exact match with .pdf/.docx extension added
+            if (book_pattern_lower + '.pdf' == book_name_lower or
+                book_pattern_lower + '.docx' == book_name_lower or
+                book_pattern_lower + '.doc' == book_name_lower or
+                book_pattern_lower + '.epub' == book_name_lower):
+                return ([book_path], True, {book_path: 1.0})
+
+            # Substring match
+            if book_pattern_lower in book_path_lower or book_pattern_lower in book_name_lower:
+                exact_matches.append(book_path)
+
+        if exact_matches:
+            if len(exact_matches) == 1:
+                return (exact_matches, True, {exact_matches[0]: 0.9})
+            else:
+                # Multiple substring matches - return all with high scores
+                return (exact_matches, False, {path: 0.9 for path in exact_matches})
+
+        # No exact matches, use fuzzy matching
+        # Create a list of book names (without directory path) for better matching
+        book_names = [os.path.basename(path) for path in all_books]
+
+        # Use difflib to find close matches
+        close_matches = difflib.get_close_matches(
+            book_pattern,
+            book_names,
+            n=5,  # Return up to 5 matches
+            cutoff=cutoff
+        )
+
+        if not close_matches:
+            # Try again with just the pattern against basenames (case-insensitive)
+            close_matches = difflib.get_close_matches(
+                book_pattern_lower,
+                [name.lower() for name in book_names],
+                n=5,
+                cutoff=cutoff
+            )
+
+            # Map back to original book names
+            if close_matches:
+                close_matches = [
+                    book_names[i] for i, name in enumerate([n.lower() for n in book_names])
+                    if name in close_matches
+                ]
+
+        # Map matched names back to full paths and calculate similarity scores
+        matched_books = []
+        similarity_scores = {}
+
+        for matched_name in close_matches:
+            for book_path in all_books:
+                if os.path.basename(book_path) == matched_name or os.path.basename(book_path).lower() == matched_name.lower():
+                    matched_books.append(book_path)
+                    # Calculate similarity score
+                    score = difflib.SequenceMatcher(
+                        None,
+                        book_pattern_lower,
+                        os.path.basename(book_path).lower()
+                    ).ratio()
+                    similarity_scores[book_path] = score
+                    break
+
+        # Sort by similarity score (highest first)
+        matched_books.sort(key=lambda x: similarity_scores.get(x, 0), reverse=True)
+
+        return (matched_books, False, similarity_scores)
+
+    def extract_pages(self, book_pattern, pages):
+        """Extract specific pages from a book (or chunks for non-PDF documents)
+
+        Args:
+            book_pattern: Partial or fuzzy book name to match (uses fuzzy matching)
+            pages: Can be:
+                - int: Single page number (or chunk index for non-PDFs)
+                - list[int]: List of page numbers (or chunk indices)
+                - str: Page range like "10-15" (or chunk range for non-PDFs)
+
+        Returns:
+            dict with book info and extracted pages/chunks
+        """
+        # Use fuzzy matching to find the book
+        matching_books, exact_match, similarity_scores = self.find_book_by_fuzzy_match(book_pattern, cutoff=0.6)
+
         if not matching_books:
             return {
                 "error": f"No books found matching '{book_pattern}'",
+                "suggestion": "Try using a different part of the book name or check spelling",
                 "available_books": list(self.book_index.keys())[:10]  # Show first 10 as suggestions
             }
-        
+
         if len(matching_books) > 1:
+            # Sort by similarity and show top matches with scores
+            matches_with_scores = [
+                {
+                    "book": book,
+                    "similarity": f"{similarity_scores.get(book, 0):.2%}"
+                }
+                for book in matching_books[:5]  # Show top 5
+            ]
             return {
                 "error": f"Multiple books match '{book_pattern}'. Please be more specific.",
-                "matching_books": matching_books
+                "matching_books": matches_with_scores,
+                "suggestion": "Use a more specific part of the book name"
             }
-        
+
         book_path = matching_books[0]
         book_name = os.path.basename(book_path)
-        
-        # Parse page numbers
+        book_info = self.book_index.get(book_path, {})
+        doc_type = book_info.get('document_type', 'Unknown')
+
+        # Check if this is a PDF with actual page numbers
+        is_pdf = book_path.lower().endswith('.pdf')
+
+        # Parse page/chunk numbers
         if isinstance(pages, int):
             page_list = [pages]
         elif isinstance(pages, list):
@@ -1819,74 +1915,121 @@ class SharedRAG:
                 return {"error": f"Invalid page range format: '{pages}'. Use format like '10-15'"}
         else:
             return {"error": f"Invalid pages format: {pages}"}
-        
-        # Query vector store for pages from this specific book
+
+        # Query vector store for pages/chunks from this specific book
         extracted_pages = {}
-        
+
         if self.vectorstore:
-            # Search for content from specific pages
-            for page_num in page_list:
-                # Query for this specific page
-                filter_criteria = {
-                    "book": book_name,
-                    "page": page_num
-                }
-                
-                try:
-                    # Get all chunks from this page using ChromaDB's filter syntax
-                    results = self.vectorstore._collection.get(
-                        where={"$and": [
-                            {"book": {"$eq": book_name}},
-                            {"page": {"$eq": page_num}}
-                        ]},
-                        include=["documents", "metadatas"]
-                    )
-                    
-                    if results and results['documents']:
-                        # Combine chunks from the same page
-                        page_content = "\n".join(results['documents'])
-                        extracted_pages[page_num] = {
-                            "content": page_content,
-                            "chunks": len(results['documents'])
-                        }
-                    else:
-                        # Try alternative query method
-                        search_results = self.vectorstore.similarity_search(
-                            f"page {page_num}",
-                            k=10,
-                            filter={"book": book_name}
+            if is_pdf:
+                # PDFs: Extract by page number
+                for page_num in page_list:
+                    try:
+                        # Get all chunks from this page using ChromaDB's filter syntax
+                        results = self.vectorstore._collection.get(
+                            where={"$and": [
+                                {"book": {"$eq": book_name}},
+                                {"page": {"$eq": page_num}}
+                            ]},
+                            include=["documents", "metadatas"]
                         )
-                        
-                        page_chunks = []
-                        for doc in search_results:
-                            if doc.metadata.get('page') == page_num:
-                                page_chunks.append(doc.page_content)
-                        
-                        if page_chunks:
+
+                        if results and results['documents']:
+                            # Combine chunks from the same page
+                            page_content = "\n".join(results['documents'])
                             extracted_pages[page_num] = {
-                                "content": "\n".join(page_chunks),
-                                "chunks": len(page_chunks)
+                                "content": page_content,
+                                "chunks": len(results['documents'])
                             }
                         else:
-                            extracted_pages[page_num] = {
-                                "content": f"Page {page_num} not found in index",
+                            # Try alternative query method
+                            search_results = self.vectorstore.similarity_search(
+                                f"page {page_num}",
+                                k=10,
+                                filter={"book": book_name}
+                            )
+
+                            page_chunks = []
+                            for doc in search_results:
+                                if doc.metadata.get('page') == page_num:
+                                    page_chunks.append(doc.page_content)
+
+                            if page_chunks:
+                                extracted_pages[page_num] = {
+                                    "content": "\n".join(page_chunks),
+                                    "chunks": len(page_chunks)
+                                }
+                            else:
+                                extracted_pages[page_num] = {
+                                    "content": f"Page {page_num} not found in index",
+                                    "chunks": 0
+                                }
+
+                    except Exception as e:
+                        logger.error(f"Error extracting page {page_num}: {str(e)}")
+                        extracted_pages[page_num] = {
+                            "content": f"Error extracting page: {str(e)}",
+                            "chunks": 0
+                        }
+            else:
+                # Non-PDFs (Word, EPUB, etc.): Extract by chunk index
+                try:
+                    # Get all chunks from this book
+                    results = self.vectorstore._collection.get(
+                        where={"book": {"$eq": book_name}},
+                        include=["documents", "metadatas"]
+                    )
+
+                    if results and results['documents']:
+                        all_chunks = results['documents']
+                        total_chunks = len(all_chunks)
+
+                        # Extract requested chunks (treating page numbers as chunk indices)
+                        for chunk_idx in page_list:
+                            # Convert 1-based page number to 0-based chunk index
+                            array_idx = chunk_idx - 1
+
+                            if 0 <= array_idx < total_chunks:
+                                extracted_pages[chunk_idx] = {
+                                    "content": all_chunks[array_idx],
+                                    "chunks": 1,
+                                    "note": f"Chunk {chunk_idx} of {total_chunks} (no page numbers available for {doc_type})"
+                                }
+                            else:
+                                extracted_pages[chunk_idx] = {
+                                    "content": f"Chunk {chunk_idx} not found (document has {total_chunks} chunks total)",
+                                    "chunks": 0
+                                }
+                    else:
+                        for chunk_idx in page_list:
+                            extracted_pages[chunk_idx] = {
+                                "content": "No chunks found in index for this document",
                                 "chunks": 0
                             }
-                            
+
                 except Exception as e:
-                    logger.error(f"Error extracting page {page_num}: {str(e)}")
-                    extracted_pages[page_num] = {
-                        "content": f"Error extracting page: {str(e)}",
-                        "chunks": 0
-                    }
-        
-        return {
+                    logger.error(f"Error extracting chunks: {str(e)}")
+                    for chunk_idx in page_list:
+                        extracted_pages[chunk_idx] = {
+                            "content": f"Error extracting chunk: {str(e)}",
+                            "chunks": 0
+                        }
+
+        result = {
             "book": book_name,
             "book_path": book_path,
+            "document_type": doc_type,
+            "is_pdf": is_pdf,
             "requested_pages": page_list,
             "extracted_pages": extracted_pages,
             "total_pages_found": len([p for p in extracted_pages.values() if p['chunks'] > 0])
         }
+
+        # Add informative message for non-PDFs
+        if not is_pdf:
+            total_chunks = book_info.get('chunks', 0)
+            result["note"] = f"This is a {doc_type} with {total_chunks} chunks (no page numbers). Requested 'pages' are treated as chunk indices."
+
+        return result
     
     def get_stats(self):
         """Get library statistics"""
@@ -1929,67 +2072,68 @@ class SharedRAG:
     
     def get_book_pages(self, book_pattern):
         """Get all page numbers available in the index for a specific book
-        
+
         Args:
-            book_pattern: Partial book name to match (case-insensitive)
-        
+            book_pattern: Partial or fuzzy book name to match (uses fuzzy matching)
+
         Returns:
             dict with book info and available page numbers
         """
-        # Find matching book
-        book_pattern_lower = book_pattern.lower()
-        matching_books = []
-        
-        for book_path in self.book_index.keys():
-            book_path_lower = book_path.lower()
-            # Try exact match first
-            if book_path_lower.endswith(book_pattern_lower) or book_path_lower.endswith(book_pattern_lower + '.pdf'):
-                matching_books = [book_path]
-                break
-            # Otherwise do partial match
-            elif book_pattern_lower in book_path_lower:
-                matching_books.append(book_path)
-        
+        # Use fuzzy matching to find the book
+        matching_books, exact_match, similarity_scores = self.find_book_by_fuzzy_match(book_pattern, cutoff=0.6)
+
         if not matching_books:
             return {
                 "error": f"No books found matching '{book_pattern}'",
+                "suggestion": "Try using a different part of the book name or check spelling",
                 "available_books": list(self.book_index.keys())[:10]  # Show first 10 as suggestions
             }
-        
+
         if len(matching_books) > 1:
+            # Sort by similarity and show top matches with scores
+            matches_with_scores = [
+                {
+                    "book": book,
+                    "similarity": f"{similarity_scores.get(book, 0):.2%}"
+                }
+                for book in matching_books[:5]  # Show top 5
+            ]
             return {
                 "error": f"Multiple books match '{book_pattern}'. Please be more specific.",
-                "matching_books": matching_books
+                "matching_books": matches_with_scores,
+                "suggestion": "Use a more specific part of the book name"
             }
-        
+
         book_path = matching_books[0]
         book_info = self.book_index[book_path]
-        
+        book_name = os.path.basename(book_path)
+
         # Get all page numbers from the database
         try:
             # Query for all documents from this book
-            results = self.db.get(
-                where={"book": book_path}
+            results = self.vectorstore._collection.get(
+                where={"book": {"$eq": book_name}},
+                include=["metadatas", "ids"]
             )
-            
+
             # Extract unique page numbers
             page_numbers = set()
             for metadata in results.get('metadatas', []):
                 if metadata and 'page' in metadata:
                     page_numbers.add(metadata['page'])
-            
+
             return {
-                "book": os.path.basename(book_path),
+                "book": book_name,
                 "book_path": book_path,
                 "total_pages": len(page_numbers),
                 "total_chunks": len(results.get('ids', [])),
                 "page_numbers": sorted(list(page_numbers))
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting pages for book '{book_pattern}': {e}")
             return {
                 "error": f"Error retrieving pages: {str(e)}",
-                "book": os.path.basename(book_path),
+                "book": book_name,
                 "book_path": book_path
             }
