@@ -9,7 +9,7 @@
     <array>
         <string>/Users/KDP/ragdex/scripts/webmonitor_service.sh</string>
     </array>
-
+    
     <key>WorkingDirectory</key>
     <string>/Users/KDP/ragdex</string>
     
@@ -31,10 +31,10 @@
     <!-- Log files -->
     <key>StandardOutPath</key>
     <string>/Users/KDP/ragdex/logs/webmonitor_stdout.log</string>
-
+    
     <key>StandardErrorPath</key>
     <string>/Users/KDP/ragdex/logs/webmonitor_stderr.log</string>
-
+    
     <!-- Environment variables -->
     <key>EnvironmentVariables</key>
     <dict>
@@ -43,7 +43,7 @@
         <key>PYTHONUNBUFFERED</key>
         <string>1</string>
         <key>PERSONAL_LIBRARY_DOC_PATH</key>
-        <string>/Users/KDP/SpiritualLibrary</string>
+        <string>/Users/KDP/ragdex/books</string>
         <key>PERSONAL_LIBRARY_DB_PATH</key>
         <string>/Users/KDP/ragdex/chroma_db</string>
     </dict>

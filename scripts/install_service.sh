@@ -60,13 +60,13 @@ if launchctl list | grep -q "$PLIST_NAME"; then
     echo "Service Information:"
     echo "- Name: $PLIST_NAME"
     echo "- Config: $INSTALLED_PLIST"
-    echo "- Logs: ~/AITools/logs/index_monitor_*.log"
+    echo "- Logs: ${PROJECT_ROOT}/logs/index_monitor_*.log"
     echo ""
     echo "To check status: ./service_status.sh"
     echo "To stop service: ./uninstall_service.sh"
-    echo "To view logs: tail -f index_monitor_stdout.log"
+    echo "To view logs: tail -f ${PROJECT_ROOT}/logs/index_monitor_stdout.log"
 else
     echo "❌ Service failed to start!"
-    echo "   Check logs at: ~/AITools/logs/index_monitor_stderr.log"
+    echo "   Check logs at: ${PROJECT_ROOT}/logs/index_monitor_stderr.log"
     exit 1
 fi

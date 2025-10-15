@@ -4,7 +4,19 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-LIBRARY_PATH="${1:-/Users/hpoliset/SpiritualLibrary}"
+
+# Auto-detect library path or use environment variable
+if [ -n "$1" ]; then
+    LIBRARY_PATH="$1"
+elif [ -n "$PERSONAL_LIBRARY_DOC_PATH" ]; then
+    LIBRARY_PATH="$PERSONAL_LIBRARY_DOC_PATH"
+elif [ -d "/Users/${USER}/SpiritualLibrary" ]; then
+    LIBRARY_PATH="/Users/${USER}/SpiritualLibrary"
+elif [ -d "${HOME}/Documents/SpiritualLibrary" ]; then
+    LIBRARY_PATH="${HOME}/Documents/SpiritualLibrary"
+else
+    LIBRARY_PATH="${PROJECT_ROOT}/books"
+fi
 
 echo "🧹 Cleaning up recursive .ocr_cache folders"
 echo "==========================================="

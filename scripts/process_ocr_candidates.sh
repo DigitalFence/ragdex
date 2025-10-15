@@ -39,9 +39,22 @@ import sys
 sys.path.append('$PROJECT_ROOT/src')
 from personal_doc_library.utils.ocr_manager import OCRManager
 
-# Initialize manager
-books_dir = os.environ.get('PERSONAL_LIBRARY_DOC_PATH', '/Users/hpoliset/SpiritualLibrary')
-db_dir = os.environ.get('PERSONAL_LIBRARY_DB_PATH', '/Users/hpoliset/ragdex/chroma_db')
+# Initialize manager - auto-detect paths if not in environment
+project_root = os.environ.get('PROJECT_ROOT', '$PROJECT_ROOT')
+user_home = os.path.expanduser('~')
+
+# Try to find books directory
+if os.environ.get('PERSONAL_LIBRARY_DOC_PATH'):
+    books_dir = os.environ['PERSONAL_LIBRARY_DOC_PATH']
+elif os.path.exists(f'{user_home}/SpiritualLibrary'):
+    books_dir = f'{user_home}/SpiritualLibrary'
+elif os.path.exists(f'{user_home}/Documents/SpiritualLibrary'):
+    books_dir = f'{user_home}/Documents/SpiritualLibrary'
+else:
+    books_dir = f'{project_root}/books'
+
+# Database directory
+db_dir = os.environ.get('PERSONAL_LIBRARY_DB_PATH', f'{project_root}/chroma_db')
 
 manager = OCRManager(books_dir, db_dir)
 

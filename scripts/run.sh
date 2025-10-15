@@ -64,7 +64,7 @@ fi
 # Check if we're in the right directory
 if [ ! -f "$SERVER_FILE" ]; then
     echo "❌ Error: $SERVER_FILE not found!"
-    echo "   Please run this script from the AITools directory."
+    echo "   Please run this script from the project root directory."
     exit 1
 fi
 

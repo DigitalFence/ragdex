@@ -66,15 +66,15 @@ if launchctl list | grep -q "$PLIST_NAME"; then
     echo "- Name: $PLIST_NAME"
     echo "- Config: $INSTALLED_PLIST"
     echo "- Web Interface: http://localhost:8888"
-    echo "- Logs: ~/AITools/logs/webmonitor_*.log"
+    echo "- Logs: ${PROJECT_ROOT}/logs/webmonitor_*.log"
     echo ""
     echo "To check status: ./webmonitor_service_status.sh"
     echo "To stop service: ./uninstall_webmonitor_service.sh"
-    echo "To view logs: tail -f logs/webmonitor_stdout.log"
+    echo "To view logs: tail -f ${PROJECT_ROOT}/logs/webmonitor_stdout.log"
     echo ""
     echo "🌐 Web Monitor will be available at: http://localhost:8888"
 else
     echo "❌ Service failed to start!"
-    echo "   Check logs at: ~/AITools/logs/webmonitor_stderr.log"
+    echo "   Check logs at: ${PROJECT_ROOT}/logs/webmonitor_stderr.log"
     exit 1
 fi

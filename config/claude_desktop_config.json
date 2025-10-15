@@ -6,7 +6,7 @@
       "env": {
         "PYTHONPATH": "/Users/KDP/ragdex/src",
         "PYTHONUNBUFFERED": "1",
-        "PERSONAL_LIBRARY_DOC_PATH": "/Users/KDP/SpiritualLibrary",
+        "PERSONAL_LIBRARY_DOC_PATH": "/Users/KDP/ragdex/books",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/KDP/ragdex/chroma_db",
         "OMP_NUM_THREADS": "4",
         "OLLAMA_NUM_PARALLEL": "2",
