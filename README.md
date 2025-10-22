@@ -306,8 +306,12 @@ ragdex manage-failed                 # Handle failed documents
 ### Upgrading from PyPI
 
 ```bash
-# Stop all services first
+# Stop all services first (use bootout for macOS 11+)
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null || \
 launchctl unload ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null
+
+# Kill any running processes
+pkill -f ragdex 2>/dev/null || true
 
 # Using uv (recommended, faster)
 uv pip install --upgrade ragdex
@@ -316,9 +320,10 @@ uv pip install --upgrade ragdex
 uv pip install --upgrade ragdex[document-processing,services]
 
 # Alternative: standard pip
-pip install --upgrade ragdex
+# pip install --upgrade ragdex
 
-# Restart services
+# Restart services (use bootstrap for macOS 11+)
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null || \
 launchctl load ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null
 
 # Restart Claude Desktop to reload MCP server
@@ -327,8 +332,12 @@ launchctl load ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null
 ### Upgrading from Source
 
 ```bash
-# Stop services
+# Stop services (use bootout for macOS 11+)
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null || \
 launchctl unload ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null
+
+# Kill any running processes
+pkill -f ragdex 2>/dev/null || true
 
 # Pull latest changes
 cd ragdex
@@ -426,10 +435,20 @@ open http://localhost:8888
 **Services not starting after upgrade?**
 ```bash
 # Check service logs
-tail -f ~/.ragdex/logs/ragdex_*.log
+tail -f ~/Library/Logs/ragdex_*.log
 
 # Reinstall services with fresh configs
 ./install_ragdex_services.sh
+```
+
+**"Unload failed: 5: Input/output error" on macOS?**
+```bash
+# Use bootout/bootstrap for macOS 11+
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ragdex.* 2>/dev/null
+
+# Alternative: Kill processes directly
+pkill -f ragdex
 ```
 
 **Claude not recognizing new features?**
