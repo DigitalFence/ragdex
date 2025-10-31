@@ -635,6 +635,399 @@ free -h 2>/dev/null || vm_stat | head -4  # Memory (Linux or macOS)
 
 ---
 
+## 🔧 Installing Correct Prerequisite Versions
+
+**Found issues with the verification script?** Here's how to install the correct versions of each prerequisite.
+
+### Python Version Requirements
+
+**Required**: Python 3.10, 3.11, or 3.12 (NOT 3.13, NOT 3.9 or lower)
+
+#### Check Your Current Version
+
+```bash
+python3 --version
+```
+
+**Expected output**: `Python 3.10.x`, `Python 3.11.x`, or `Python 3.12.x`
+
+#### Install Python 3.11 (Recommended)
+
+<details>
+<summary><strong>macOS Installation</strong></summary>
+
+**Prerequisites**: Homebrew must be installed first (see below)
+
+```bash
+# Install Python 3.11
+brew install python@3.11
+
+# Verify installation
+/opt/homebrew/bin/python3.11 --version
+# Expected: Python 3.11.x
+
+# Note: On Intel Macs, path may be /usr/local/bin/python3.11
+```
+
+**Set as default (optional)**:
+```bash
+# Add to your shell profile (~/.zshrc or ~/.bashrc)
+echo 'alias python3=/opt/homebrew/bin/python3.11' >> ~/.zshrc
+source ~/.zshrc
+
+# Verify
+python3 --version  # Should now show 3.11.x
+```
+
+</details>
+
+<details>
+<summary><strong>Ubuntu/Debian Installation</strong></summary>
+
+```bash
+# Update package list
+sudo apt update
+
+# Install Python 3.11 with all necessary tools
+sudo apt install python3.11 python3.11-venv python3.11-dev python3.11-distutils
+
+# Verify installation
+python3.11 --version
+# Expected: Python 3.11.x
+
+# Set as default (optional)
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+```
+
+</details>
+
+<details>
+<summary><strong>Fedora/RHEL Installation</strong></summary>
+
+```bash
+# Install Python 3.11 with development tools
+sudo dnf install python3.11 python3.11-devel python3.11-pip
+
+# Verify installation
+python3.11 --version
+# Expected: Python 3.11.x
+```
+
+</details>
+
+---
+
+### Xcode Command Line Tools (macOS Only)
+
+**Required for**: Compiling Python packages with C extensions (like ChromaDB dependencies)
+
+#### Check if Installed
+
+```bash
+xcode-select -p
+```
+
+**Expected output**: `/Library/Developer/CommandLineTools`
+**If missing**: `xcode-select: error: unable to get active developer directory`
+
+#### Install Xcode CLI Tools
+
+```bash
+# Trigger installation
+xcode-select --install
+```
+
+**What happens:**
+1. A popup window appears
+2. Click "Install" button
+3. Accept the license agreement
+4. Wait 5-10 minutes for download and installation
+5. Installation completes automatically
+
+**Verify installation:**
+```bash
+xcode-select -p
+# Expected: /Library/Developer/CommandLineTools
+
+# Test by checking for gcc
+gcc --version
+# Expected: Apple clang version 14.x or newer
+```
+
+---
+
+### Homebrew (macOS Package Manager)
+
+**Required for**: Installing Python, uv, and optional tools on macOS
+
+#### Check if Installed
+
+```bash
+brew --version
+```
+
+**Expected output**: `Homebrew 4.x.x`
+**If missing**: `command not found: brew`
+
+#### Install Homebrew
+
+```bash
+# Run the official installation script
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**What happens:**
+1. Script downloads and installs Homebrew (~5 minutes)
+2. You'll be prompted for your password (admin access required)
+3. Follow on-screen instructions to add Homebrew to your PATH
+
+**Add Homebrew to PATH** (if not done automatically):
+
+<details>
+<summary>For Apple Silicon Macs (M1/M2/M3)</summary>
+
+```bash
+# Add to shell profile
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Verify
+brew --version
+```
+
+</details>
+
+<details>
+<summary>For Intel Macs</summary>
+
+```bash
+# Add to shell profile
+echo 'eval "$(/usr/local/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/usr/local/bin/brew shellenv)"
+
+# Verify
+brew --version
+```
+
+</details>
+
+**After installation:**
+```bash
+# Close and reopen Terminal
+# Then verify
+brew --version
+# Expected: Homebrew 4.x.x or newer
+
+# Update Homebrew
+brew update
+```
+
+---
+
+### uv (Fast Python Package Manager)
+
+**Recommended for**: 10-100x faster package installation than pip
+
+#### Check if Installed
+
+```bash
+uv --version
+```
+
+**Expected output**: `uv 0.x.x`
+**If missing**: `command not found: uv`
+
+#### Install uv
+
+```bash
+# Run the official installation script
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Expected output:**
+```
+Downloading uv...
+Installing uv to /Users/yourname/.cargo/bin
+uv installed successfully!
+```
+
+**Important**: Close and reopen Terminal after installation
+
+**Verify installation:**
+```bash
+uv --version
+# Expected: uv 0.x.x
+```
+
+**If command not found after reopening Terminal:**
+```bash
+# Add to PATH manually
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Verify again
+uv --version
+```
+
+---
+
+### pip (Python Package Installer)
+
+**Minimum Version**: 23.0 or newer (25.x recommended)
+
+#### Check Your pip Version
+
+```bash
+# If in virtual environment:
+pip --version
+
+# Or use full path:
+python3 -m pip --version
+```
+
+**Expected output**: `pip 25.3.x` (or 23.x+)
+**If outdated**: `pip 21.x.x` or lower
+
+#### Upgrade pip
+
+**If you have a virtual environment** (recommended):
+```bash
+# Activate virtual environment
+source ~/ragdex_env/bin/activate
+
+# Upgrade pip
+python -m pip install --upgrade pip
+
+# Verify new version
+pip --version
+# Expected: pip 25.x.x or newer
+```
+
+**If using system Python** (not recommended):
+```bash
+# Upgrade system pip (may require sudo on some systems)
+python3 -m pip install --upgrade pip --user
+
+# Verify
+python3 -m pip --version
+```
+
+**If upgrade fails** (externally-managed-environment error):
+```bash
+# This means you must use a virtual environment
+# Create one first:
+python3 -m venv ~/ragdex_env
+source ~/ragdex_env/bin/activate
+
+# Now upgrade pip inside the venv
+pip install --upgrade pip
+
+# Verify
+pip --version  # Should show 25.x
+```
+
+---
+
+### setuptools and wheel (Build Tools)
+
+**Sometimes needed for**: Building packages from source
+
+#### Install/Upgrade in Virtual Environment
+
+```bash
+# Activate virtual environment
+source ~/ragdex_env/bin/activate
+
+# Install/upgrade build tools
+pip install --upgrade setuptools wheel
+
+# Verify
+pip show setuptools wheel
+```
+
+---
+
+## 📋 Complete Fresh Installation Checklist
+
+**Starting from scratch?** Follow these steps in order:
+
+### macOS Fresh Installation
+
+```bash
+# 1. Install Xcode Command Line Tools
+xcode-select --install
+# Wait for popup, click Install, wait 5-10 minutes
+
+# 2. Install Homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# Follow on-screen instructions
+# Close and reopen Terminal
+
+# 3. Verify Homebrew
+brew --version
+
+# 4. Install Python 3.11
+brew install python@3.11
+
+# 5. Verify Python
+/opt/homebrew/bin/python3.11 --version
+
+# 6. Install uv (optional but recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Close and reopen Terminal
+
+# 7. Create virtual environment with Python 3.11
+/opt/homebrew/bin/python3.11 -m venv ~/ragdex_env
+
+# 8. Activate and upgrade pip
+source ~/ragdex_env/bin/activate
+python -m pip install --upgrade pip
+
+# 9. Verify pip version
+pip --version  # Should be 25.x or newer
+
+# 10. Install Ragdex
+pip install ragdex
+
+# Or with uv (faster):
+# uv pip install --python ~/ragdex_env/bin/python ragdex
+```
+
+### Linux Fresh Installation (Ubuntu/Debian)
+
+```bash
+# 1. Update system
+sudo apt update && sudo apt upgrade -y
+
+# 2. Install build tools and Python
+sudo apt install -y build-essential python3.11 python3.11-venv python3.11-dev
+
+# 3. Verify Python
+python3.11 --version
+
+# 4. Install uv (optional)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Close and reopen Terminal
+
+# 5. Create virtual environment
+python3.11 -m venv ~/ragdex_env
+
+# 6. Activate and upgrade pip
+source ~/ragdex_env/bin/activate
+python -m pip install --upgrade pip
+
+# 7. Verify pip version
+pip --version  # Should be 25.x or newer
+
+# 8. Install Ragdex
+pip install ragdex
+
+# Or with uv:
+# uv pip install --python ~/ragdex_env/bin/python ragdex
+```
+
+---
+
 ## ⏱️ Time Expectations
 
 | Task | Time | Notes |
@@ -786,20 +1179,49 @@ uv pip install --python ~/ragdex_env/bin/python ragdex
 
 ---
 
-### Issue 3: "No matching distribution found for ragdex"
+### Issue 3: "No matching distribution found for ragdex" + Outdated pip Warning
 
-**Problem**: pip/uv can't find the ragdex package.
+**Problem**: You see these errors:
+```
+ERROR: Could not find a version that satisfies the requirement ragdex (from versions: none)
+ERROR: No matching distribution found for ragdex
+WARNING: You are using pip version 21.2.4; however, version 25.3 is available.
+```
 
-**Quick Fix**:
+**Root Cause**: Your pip version is too old (pip 21.2.4 is from 2021). Old pip versions can't find newer packages due to outdated package index metadata.
+
+**Quick Fix** (Upgrade pip first, then install):
 ```bash
-# Check your internet connection
+# Activate your virtual environment
+source ~/ragdex_env/bin/activate
+
+# Upgrade pip to latest version (25.3+)
+python -m pip install --upgrade pip
+
+# Verify pip version (should show 25.x or newer)
+pip --version
+
+# Now install ragdex
+pip install ragdex
+```
+
+**If that doesn't work**:
+```bash
+# Check internet connection
 ping pypi.org
 
-# Update pip first:
-pip install --upgrade pip
+# Try with explicit index URL
+pip install --index-url https://pypi.org/simple ragdex
 
-# Try again:
-pip install ragdex
+# Or use uv instead (faster and more reliable):
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Close and reopen Terminal
+uv pip install --python ~/ragdex_env/bin/python ragdex
+```
+
+**Still failing?** Check Python version compatibility:
+```bash
+python --version  # Must be 3.10, 3.11, or 3.12 (NOT 3.13)
 ```
 
 ---
