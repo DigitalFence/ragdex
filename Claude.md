@@ -139,6 +139,284 @@ python -m personal_doc_library.monitoring.monitor_web_enhanced  # Start web dash
 - **Manual testing**: Use `./scripts/run.sh` and monitoring tools
 - Always test changes before committing
 
+### Code Design Principles (SOLID)
+
+When modifying or creating shell scripts, follow SOLID principles adapted for bash:
+
+#### 1. Single Responsibility Principle (SRP)
+**Each function should have ONE clear purpose**
+
+✅ **Good Example**:
+```bash
+validate_executable() {
+    local exe_path="$1"
+    [ -x "$exe_path" ] && timeout 2 "$exe_path" --version &>/dev/null
+}
+
+check_port_available() {
+    local port="$1"
+    ! lsof -Pi ":$port" -sTCP:LISTEN -t >/dev/null 2>&1
+}
+
+create_directory_safe() {
+    local dir_path="$1"
+    mkdir -p "$dir_path" && touch "$dir_path/.test" && rm "$dir_path/.test"
+}
+```
+
+❌ **Anti-pattern**:
+```bash
+# Violates SRP - does discovery, validation, and path setting
+setup_everything() {
+    find_ragdex
+    validate_all
+    create_all_dirs
+    install_all_services
+    # Too many responsibilities!
+}
+```
+
+#### 2. Open/Closed Principle (OCP)
+**Design for extension without modification**
+
+✅ **Good Example**:
+```bash
+# Configuration-driven approach (easy to extend)
+declare -A SERVICES=(
+    ["indexer"]="com.ragdex.indexer:$RAGDEX_INDEX_PATH"
+    ["webmonitor"]="com.ragdex.webmonitor:$RAGDEX_WEB_PATH"
+)
+
+install_service() {
+    local service_name="$1"
+    local service_config="${SERVICES[$service_name]}"
+    # Generic installation logic
+}
+
+# Adding new service requires NO code changes, just config:
+# SERVICES["newservice"]="com.ragdex.newservice:$RAGDEX_NEW_PATH"
+```
+
+❌ **Anti-pattern**:
+```bash
+# Hard-coded approach (requires modification to extend)
+install_services() {
+    install_indexer
+    install_webmonitor
+    # Adding new service requires editing this function
+}
+```
+
+#### 3. Liskov Substitution Principle (LSP)
+**Subtypes/variants should be interchangeable**
+
+✅ **Good Example**:
+```bash
+# Generic interface for all validators
+validate_resource() {
+    local resource_type="$1"
+    local resource_value="$2"
+
+    case "$resource_type" in
+        "executable") validate_executable "$resource_value" ;;
+        "directory") validate_directory "$resource_value" ;;
+        "port") validate_port "$resource_value" ;;
+    esac
+}
+
+# All validators follow same contract: take value, return 0/1
+```
+
+#### 4. Interface Segregation Principle (ISP)
+**Provide specific interfaces, not one generic one**
+
+✅ **Good Example**:
+```bash
+# Specific validation functions
+validate_paths() { ... }      # Only validates paths
+validate_executables() { ... } # Only validates executables
+validate_services() { ... }    # Only validates services
+
+# Caller uses only what they need
+validate_paths || exit 1
+```
+
+❌ **Anti-pattern**:
+```bash
+# Monolithic validation
+validate_everything() {
+    # Forces all callers to validate everything, even if they only need paths
+}
+```
+
+#### 5. Dependency Inversion Principle (DIP)
+**Depend on abstractions, not concrete implementations**
+
+✅ **Good Example**:
+```bash
+# Abstract service manager interface
+SERVICE_MANAGER="${SERVICE_MANAGER:-launchctl}"
+
+load_service() {
+    local plist="$1"
+    case "$SERVICE_MANAGER" in
+        launchctl) launchctl load "$plist" ;;
+        systemctl) systemctl enable "$plist" ;;
+        # Easy to add new service managers
+    esac
+}
+
+# Configuration determines implementation
+```
+
+❌ **Anti-pattern**:
+```bash
+# Hard-coded dependency on launchctl
+load_service() {
+    launchctl load "$1"  # Can't use systemctl or other service managers
+}
+```
+
+### Refactoring Guidelines
+
+When enhancing existing scripts:
+
+1. **Extract Functions** - Break large functions (>50 lines) into smaller, focused ones
+2. **Use Configuration** - Replace hard-coded values with arrays/associative arrays
+3. **Centralize Validation** - Create reusable validation functions
+4. **Error Abstraction** - Use consistent error handling patterns
+5. **Testability** - Write functions that can be tested independently
+
+**Example Refactoring Pattern**:
+
+Before (monolithic):
+```bash
+# install_ragdex_services.sh lines 71-100
+# Mixed discovery, validation, and path setting
+if command -v ragdex-mcp &> /dev/null; then
+    RAGDEX_MCP_PATH=$(which ragdex-mcp)
+    RAGDEX_INDEX_PATH=$(which ragdex-index)
+    RAGDEX_WEB_PATH=$(which ragdex-web)
+    echo "Found ragdex in PATH"
+elif [ -f "$RAGDEX_ENV/bin/ragdex-mcp" ]; then
+    # ... more logic
+fi
+```
+
+After (SOLID-compliant):
+```bash
+# Separated concerns
+discover_ragdex_installation() {
+    local search_locations=("$PATH" "$RAGDEX_ENV/bin" "$PARENT_DIR/bin")
+    for location in "${search_locations[@]}"; do
+        find_executables_in "$location" && return 0
+    done
+    return 1
+}
+
+validate_discovered_executables() {
+    for cmd in "ragdex-mcp" "ragdex-index" "ragdex-web"; do
+        validate_executable "${cmd}_PATH" || return 1
+    done
+    return 0
+}
+
+# Main flow
+discover_ragdex_installation || die "Ragdex not found"
+validate_discovered_executables || die "Invalid installation"
+```
+
+### Script Organization Template
+
+For new scripts, follow this structure:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# 1. Constants and Configuration
+readonly SCRIPT_VERSION="1.0.0"
+declare -A CONFIG=(...)
+
+# 2. Utility Functions (generic, reusable)
+die() { echo "$*" >&2; exit 1; }
+log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
+
+# 3. Validation Functions (SRP - one purpose each)
+validate_executable() { ... }
+validate_directory() { ... }
+validate_port() { ... }
+
+# 4. Business Logic Functions (SRP - specific tasks)
+discover_installation() { ... }
+create_configuration() { ... }
+install_service() { ... }
+
+# 5. Orchestration
+main() {
+    parse_arguments "$@"
+    validate_environment
+    discover_installation
+    create_configuration
+    install_services
+    verify_installation
+}
+
+# 6. Entry Point
+main "$@"
+```
+
+### Testing SOLID Code
+
+SOLID-compliant code is easier to test:
+
+```bash
+# test_install_script.sh
+source install_ragdex_services.sh
+
+# Test individual functions (SRP makes this possible)
+test_validate_executable() {
+    # Mock executable
+    touch /tmp/test_exe && chmod +x /tmp/test_exe
+
+    if validate_executable "/tmp/test_exe"; then
+        echo "✓ validate_executable works"
+    else
+        echo "✗ validate_executable failed"
+        return 1
+    fi
+}
+
+# Run tests
+test_validate_executable
+test_check_port_available
+test_create_directory_safe
+```
+
+### When to Apply SOLID
+
+**Always apply when**:
+- Creating new scripts
+- Major refactoring of existing scripts
+- Scripts will be maintained long-term
+- Scripts are >200 lines
+
+**Consider trade-offs for**:
+- Small utility scripts (<50 lines)
+- One-time migration scripts
+- Scripts that won't change often
+
+### Key Takeaway
+
+**SOLID principles make bash scripts**:
+- ✅ Easier to test
+- ✅ Easier to debug
+- ✅ Easier to extend
+- ✅ More maintainable
+- ✅ More professional
+
+**Apply these principles to all new scripts and when enhancing existing ones.**
+
 ## Known Issues and Solutions
 
 ### LaunchAgent Permissions (macOS)

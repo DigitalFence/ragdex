@@ -36,12 +36,13 @@
 </td>
 <td width="50%">
 
-#### 📧 Email Intelligence (v0.2.0+)
+#### 📧 Email Intelligence (v0.2.0+) 🔒
 - **Apple Mail** (EMLX) support
 - **Outlook** (OLM export) support
 - **Smart filtering** - Skip marketing & spam
 - **Attachment processing**
 - **Thread reconstruction**
+- **Privacy**: Disabled by default - [Enable it →](QUICKSTART.md#-optional-enable-email-indexing)
 
 </td>
 </tr>
@@ -86,80 +87,110 @@
 
 ### 🎯 Smart Email Filtering
 
-Ragdex intelligently filters out noise from your email archives:
+> **🔒 Privacy First**: Email indexing is **DISABLED by default**. Your emails are NOT accessed unless you explicitly enable this feature. [Learn more →](QUICKSTART.md#-optional-enable-email-indexing)
+
+When enabled, Ragdex intelligently filters out noise from your email archives:
 
 - ❌ **Auto-skips**: Marketing, promotions, shopping receipts, newsletters
 - ❌ **Excludes**: Spam, junk, trash folders
 - ✅ **Focuses on**: Personal communications, important discussions
 - ⚙️ **Configurable**: Whitelist important senders, set date ranges
+- 🔐 **Local processing**: All email data stays on your computer
 
 ---
 
 ## 🚀 Quick Start
 
+> **🆕 New to Ragdex? First time user?**
+> See **[QUICKSTART.md](QUICKSTART.md)** for detailed step-by-step instructions including prerequisites, troubleshooting, and first query examples.
+
+### Prerequisites
+
+**Quick Checklist** (see [Complete Prerequisites Guide →](QUICKSTART.md#-before-you-begin---complete-checklist)):
+
+- **System**: macOS 10.15+ or Linux (Ubuntu 20.04+, Debian 11+, Fedora 35+)
+- **Python**: 3.10-3.12 (NOT 3.13) - [How to check →](QUICKSTART.md#1-python-310-311-or-312)
+- **macOS Tools**: Xcode Command Line Tools - [How to install →](QUICKSTART.md#2-xcode-command-line-tools-macos-only)
+- **macOS Tools**: Homebrew - [How to install →](QUICKSTART.md#3-homebrew-macos-package-manager)
+- **Package Manager**: uv (recommended) - [How to install →](QUICKSTART.md#4-uv-fast-python-package-manager)
+- **Claude Desktop**: Free or paid tier - [Download →](https://claude.ai/download)
+- **Permissions (macOS)**: Terminal Full Disk Access - [Critical setup →](QUICKSTART.md#2-full-disk-access-macos-only---critical)
+- **Resources**: 8GB RAM min (16GB recommended), 5GB disk space
+- **Admin Access**: Required for installation - [Details →](QUICKSTART.md#1-adminsudo-access)
+
+**Optional Tools** (format-specific):
+- Calibre (MOBI/AZW ebooks), LibreOffice (.doc files), ocrmypdf (scanned PDFs)
+- [See all optional dependencies →](QUICKSTART.md#-optional-dependencies-format-specific)
+
+**Run Prerequisites Check Script**: [Verification script →](QUICKSTART.md#-prerequisites-verification-script)
+
 ### Installation (2-5 minutes)
 
 ```bash
-# Using uv (faster, ~2 minutes)
+# Using uv (recommended, faster)
 uv venv ~/ragdex_env
-uv pip install ragdex
+uv pip install --python ~/ragdex_env/bin/python ragdex
 
-# Or standard pip (~5 minutes)
-python -m venv ~/ragdex_env
-source ~/ragdex_env/bin/activate
+# Or standard pip
+python3 -m venv ~/ragdex_env
+source ~/ragdex_env/bin/activate  # Required for pip
 pip install ragdex
 ```
 
-**Note**: First run will download ~2GB of embedding models (5-10 minutes on broadband)
+**Note**: First run downloads ~2GB of AI models (5-10 min). [Details](QUICKSTART.md#-first-run-model-download)
 
 ### Setup Services (2-3 minutes)
 
 ```bash
-# Download installer
+# Download and run interactive installer
 curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
 chmod +x install_ragdex_services.sh
-
-# Run interactive setup
 ./install_ragdex_services.sh
-
-# That's it! Services are running
 ```
+
+The installer will:
+- Ask where your documents are located
+- Set up background indexing
+- Configure the web dashboard (localhost:8888)
+- Display a JSON configuration for Claude Desktop
 
 ### Configure Claude Desktop
 
-After running the installer, it will display a JSON configuration snippet. You need to:
+1. **Copy the JSON configuration** displayed by the installer
+2. **Open Claude's config**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+3. **Paste the configuration** (merge if you have other MCP servers)
+4. **Restart Claude Desktop** (Cmd+Q, then reopen)
 
-1. **Copy the displayed configuration** (it will look like this):
-```json
-{
-  "mcpServers": {
-    "ragdex": {
-      "command": "/path/to/ragdex-mcp",
-      "env": { ... }
-    }
-  }
-}
-```
+**[→ Detailed configuration guide with examples](QUICKSTART.md#-configuration-5-minutes)**
 
-2. **Open Claude Desktop's config file**:
-   - Location: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - You can open it with: `open ~/Library/Application\ Support/Claude/`
+### Verify Installation
 
-3. **Add or merge the configuration**:
-   - If the file is empty, paste the entire JSON
-   - If you have other servers, add the "ragdex" section to your existing "mcpServers" object
-
-4. **Restart Claude Desktop** for changes to take effect
-
-**Alternative: Automatic Configuration**
 ```bash
-# This script can automatically update your Claude config
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/update_claude_config.sh
-chmod +x update_claude_config.sh
-./update_claude_config.sh
+# Check version
+~/ragdex_env/bin/ragdex --version
+
+# Check services running
+launchctl list | grep ragdex
+
+# View web dashboard
+open http://localhost:8888
+
+# Test in Claude Desktop
+# Ask: "Can you check my library stats?"
 ```
 
-**You're done!** 🎉 Ragdex is now indexing your documents and ready to use with Claude.
+**[→ Complete verification steps](QUICKSTART.md#-verification-test-your-installation)**
+
+### Troubleshooting
+
+Having issues? Common problems and solutions:
+- **Wrong Python version?** [Install Python 3.11](QUICKSTART.md#-step-1-check-your-python-version)
+- **Claude doesn't see Ragdex?** [Check your config](QUICKSTART.md#problem-3-claude-desktop-doesnt-show-ragdex-tool)
+- **No documents indexed?** [Verify paths and permissions](QUICKSTART.md#problem-4-no-documents-found-or-0-documents-indexed)
+
+**[→ Full troubleshooting guide](QUICKSTART.md#-troubleshooting)**
+
+**You're done!** 🎉 Start querying your documents with Claude.
 
 ---
 
@@ -526,10 +557,11 @@ print(f"Documents indexed: {len(rag.book_index)}")
 - Compare different approaches from papers
 - Extract key insights from reports
 
-### 📧 Email Intelligence
+### 📧 Email Intelligence (Optional)
 - Search through years of communications
 - Find important attachments
 - Track project discussions
+- **Note**: [Must be enabled manually](QUICKSTART.md#-optional-enable-email-indexing) - disabled by default for privacy
 
 ### 🎓 Academic Study
 - Research across textbooks and papers
