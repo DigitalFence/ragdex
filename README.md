@@ -126,18 +126,22 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 
 ### Installation (2-5 minutes)
 
+> **⚡ Use uv for best experience** - 10-100x faster than pip, better dependency resolution, avoids common errors
+
 ```bash
-# Using uv (recommended, faster)
+# Using uv (⭐ STRONGLY RECOMMENDED)
 uv venv ~/ragdex_env
 uv pip install --python ~/ragdex_env/bin/python ragdex
 
-# Or standard pip
+# Alternative: pip (slower, requires activation)
 python3 -m venv ~/ragdex_env
-source ~/ragdex_env/bin/activate  # Required for pip
+source ~/ragdex_env/bin/activate
 pip install ragdex
 ```
 
 **Note**: First run downloads ~2GB of AI models (5-10 min). [Details](QUICKSTART.md#-first-run-model-download)
+
+**Don't have uv?** Install it: `curl -LsSf https://astral.sh/uv/install.sh | sh` (then close/reopen Terminal)
 
 ### Setup Services (2-3 minutes)
 

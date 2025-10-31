@@ -951,7 +951,7 @@ pip show setuptools wheel
 
 **Starting from scratch?** Follow these steps in order:
 
-### macOS Fresh Installation
+### macOS Fresh Installation (Using uv - Recommended)
 
 ```bash
 # 1. Install Xcode Command Line Tools
@@ -972,11 +972,32 @@ brew install python@3.11
 # 5. Verify Python
 /opt/homebrew/bin/python3.11 --version
 
-# 6. Install uv (optional but recommended)
+# 6. Install uv (⭐ RECOMMENDED - 10-100x faster than pip)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 # Close and reopen Terminal
 
-# 7. Create virtual environment with Python 3.11
+# 7. Verify uv installation
+uv --version
+
+# 8. Create virtual environment with uv
+uv venv ~/ragdex_env --python /opt/homebrew/bin/python3.11
+
+# 9. Install Ragdex with uv (FAST - ~2 minutes)
+uv pip install --python ~/ragdex_env/bin/python ragdex
+
+# 10. Verify installation
+~/ragdex_env/bin/python -c "import ragdex; print('✅ Ragdex installed successfully!')"
+```
+
+<details>
+<summary><strong>Alternative: Using pip (slower, not recommended)</strong></summary>
+
+```bash
+# Follow steps 1-5 above, then:
+
+# 6. Skip uv installation
+
+# 7. Create virtual environment
 /opt/homebrew/bin/python3.11 -m venv ~/ragdex_env
 
 # 8. Activate and upgrade pip
@@ -986,14 +1007,13 @@ python -m pip install --upgrade pip
 # 9. Verify pip version
 pip --version  # Should be 25.x or newer
 
-# 10. Install Ragdex
+# 10. Install Ragdex with pip (SLOW - ~5-8 minutes)
 pip install ragdex
-
-# Or with uv (faster):
-# uv pip install --python ~/ragdex_env/bin/python ragdex
 ```
 
-### Linux Fresh Installation (Ubuntu/Debian)
+</details>
+
+### Linux Fresh Installation (Ubuntu/Debian - Using uv)
 
 ```bash
 # 1. Update system
@@ -1005,9 +1025,30 @@ sudo apt install -y build-essential python3.11 python3.11-venv python3.11-dev
 # 3. Verify Python
 python3.11 --version
 
-# 4. Install uv (optional)
+# 4. Install uv (⭐ RECOMMENDED - 10-100x faster than pip)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 # Close and reopen Terminal
+
+# 5. Verify uv installation
+uv --version
+
+# 6. Create virtual environment with uv
+uv venv ~/ragdex_env --python python3.11
+
+# 7. Install Ragdex with uv (FAST - ~2 minutes)
+uv pip install --python ~/ragdex_env/bin/python ragdex
+
+# 8. Verify installation
+~/ragdex_env/bin/python -c "import ragdex; print('✅ Ragdex installed successfully!')"
+```
+
+<details>
+<summary><strong>Alternative: Using pip (slower, not recommended)</strong></summary>
+
+```bash
+# Follow steps 1-3 above, then:
+
+# 4. Skip uv installation
 
 # 5. Create virtual environment
 python3.11 -m venv ~/ragdex_env
@@ -1019,12 +1060,11 @@ python -m pip install --upgrade pip
 # 7. Verify pip version
 pip --version  # Should be 25.x or newer
 
-# 8. Install Ragdex
+# 8. Install Ragdex with pip (SLOW - ~5-8 minutes)
 pip install ragdex
-
-# Or with uv:
-# uv pip install --python ~/ragdex_env/bin/python ragdex
 ```
+
+</details>
 
 ---
 
@@ -1042,13 +1082,20 @@ pip install ragdex
 
 ---
 
-## 🎯 Installation (5-10 minutes)
+## 🎯 Installation (2-8 minutes)
 
 Now that prerequisites are ready, let's install Ragdex!
 
-### Option A: Using uv (Recommended - Fastest)
+> **💡 Why uv?** We **strongly recommend** using **uv** instead of pip:
+> - ⚡ **10-100x faster** (2-3 min vs 5-8 min installation)
+> - 🛡️ **Better dependency resolution** - avoids version conflicts
+> - 🎯 **No virtual environment activation needed** - simpler workflow
+> - 🔒 **More reliable** - handles package metadata better
+> - ✅ **Prevents common errors** like outdated pip issues
 
-This is the **recommended method** for beginners. It's faster and handles dependencies better.
+### Using uv (⭐ Strongly Recommended)
+
+**This is the preferred installation method for all users.**
 
 #### 1. Create a virtual environment
 
@@ -1090,9 +1137,12 @@ Installed 45 packages in 890ms
 
 ---
 
-### Option B: Using Standard pip (Alternative)
+### Using pip (⚠️ Fallback Option - Slower)
 
-If you prefer using standard pip or couldn't install uv:
+**Only use this if you cannot install uv.** pip is slower and more error-prone.
+
+<details>
+<summary><strong>⚠️ Click here only if uv installation failed</strong></summary>
 
 #### 1. Create a virtual environment
 
@@ -1137,6 +1187,10 @@ Successfully installed ragdex-0.2.x chromadb-... langchain-...
 
 ✅ **Installation complete!** Continue to the Configuration section below.
 
+**💡 Recommendation**: For future projects, consider installing uv for faster package management.
+
+</details>
+
 ---
 
 ## ⚡ Quick Installation Troubleshooting
@@ -1164,18 +1218,28 @@ uv --version  # Should now work
 
 **Why this happens**: System Python is protected to prevent breaking OS tools.
 
-**Quick Fix** (use virtual environment):
+**Best Fix** (⭐ Use uv - avoids this error entirely):
 ```bash
-# Make sure you created the venv first:
-python3 -m venv ~/ragdex_env
+# Install uv if you haven't already:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Close and reopen Terminal
 
-# Then install INSIDE the venv:
-source ~/ragdex_env/bin/activate  # Activate first!
-pip install ragdex
-
-# Or with uv (doesn't require activation):
+# Create venv and install with uv (no activation needed):
+uv venv ~/ragdex_env
 uv pip install --python ~/ragdex_env/bin/python ragdex
 ```
+
+**Alternative Fix** (if you must use pip):
+```bash
+# Create virtual environment:
+python3 -m venv ~/ragdex_env
+
+# Activate and install:
+source ~/ragdex_env/bin/activate
+pip install ragdex
+```
+
+**💡 Why uv is better**: uv doesn't require virtual environment activation and avoids many pip-related errors.
 
 ---
 
@@ -1190,7 +1254,22 @@ WARNING: You are using pip version 21.2.4; however, version 25.3 is available.
 
 **Root Cause**: Your pip version is too old (pip 21.2.4 is from 2021). Old pip versions can't find newer packages due to outdated package index metadata.
 
-**Quick Fix** (Upgrade pip first, then install):
+**Best Fix** (⭐ Switch to uv - avoids pip version issues):
+```bash
+# Install uv (if you haven't already)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Close and reopen Terminal
+
+# Verify uv installation
+uv --version
+
+# Install ragdex with uv (avoids all pip-related issues)
+uv pip install --python ~/ragdex_env/bin/python ragdex
+```
+
+**💡 Why this works**: uv uses modern package resolution and doesn't rely on outdated pip versions.
+
+**Alternative Fix** (if you must use pip):
 ```bash
 # Activate your virtual environment
 source ~/ragdex_env/bin/activate
@@ -1205,18 +1284,13 @@ pip --version
 pip install ragdex
 ```
 
-**If that doesn't work**:
+**If pip upgrade fails**:
 ```bash
 # Check internet connection
 ping pypi.org
 
 # Try with explicit index URL
 pip install --index-url https://pypi.org/simple ragdex
-
-# Or use uv instead (faster and more reliable):
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# Close and reopen Terminal
-uv pip install --python ~/ragdex_env/bin/python ragdex
 ```
 
 **Still failing?** Check Python version compatibility:
