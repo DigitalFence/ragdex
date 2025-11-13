@@ -65,6 +65,13 @@ document-processing = [
 services = [
   "python-daemon>=3.0"
 ]
+# Vector database backends (optional - ChromaDB is included by default)
+qdrant = [
+  "qdrant-client>=1.7.0"
+]
+all-vector-stores = [
+  "qdrant-client>=1.7.0"
+]
 
 [project.scripts]
 ragdex = "personal_doc_library.cli:main"

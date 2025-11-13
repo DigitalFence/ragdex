@@ -36,6 +36,9 @@ import threading
 from collections import OrderedDict
 import difflib
 
+# Import vector store factory
+from .vector_stores import VectorStoreFactory, VectorStoreAdapter
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -782,7 +785,7 @@ class SharedRAG:
         # Initialize embeddings
         logger.info("Initializing embeddings...")
         device = 'mps' if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() else 'cpu'
-        
+
         # BACKUP: Original 384-dim model was "sentence-transformers/all-MiniLM-L6-v2"
         # Switching to original 768-dim model to match existing database
         self.embeddings = HuggingFaceEmbeddings(
@@ -790,13 +793,13 @@ class SharedRAG:
             model_kwargs={'device': device},
             encode_kwargs={'normalize_embeddings': True}
         )
-        
+
         # LLM initialization removed - using direct RAG results
         # logger.info("Initializing Ollama LLM...")
         # self.llm = Ollama(model="llama3.3:70b")
-        
-        # Initialize or load vector store
-        self.vectorstore = self.initialize_vectorstore()
+
+        # Initialize or load vector store using factory
+        self._vector_store_adapter = self.initialize_vectorstore()
     
     def load_book_index(self):
         """Load the book index from disk"""
@@ -912,21 +915,47 @@ class SharedRAG:
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
     
-    def initialize_vectorstore(self):
-        """Initialize or load the vector store"""
-        if os.path.exists(self.db_directory) and os.path.exists(os.path.join(self.db_directory, "chroma.sqlite3")):
-            logger.info("Loading existing vector store...")
-            return Chroma(
+    def initialize_vectorstore(self) -> VectorStoreAdapter:
+        """Initialize or load the vector store using factory pattern"""
+        try:
+            # Get vector store type and configuration from config
+            vector_store_type = config.vector_store_type
+            vector_store_config = config.get_vector_store_config()
+
+            logger.info(f"Initializing vector store: {vector_store_type}")
+            if vector_store_config:
+                logger.info(f"Vector store config: {vector_store_config}")
+
+            # Create vector store adapter using factory
+            adapter = VectorStoreFactory.create(
+                vector_store_type=vector_store_type,
                 persist_directory=self.db_directory,
-                embedding_function=self.embeddings
+                embeddings=self.embeddings,
+                **vector_store_config
             )
-        else:
-            logger.info("Creating new vector store...")
-            os.makedirs(self.db_directory, exist_ok=True)
-            return Chroma(
-                embedding_function=self.embeddings,
-                persist_directory=self.db_directory
+
+            logger.info(f"Vector store initialized: {adapter.vector_store_name}")
+            return adapter
+
+        except Exception as e:
+            logger.error(f"Error initializing vector store: {e}")
+            logger.info("Falling back to ChromaDB...")
+            # Fallback to ChromaDB for backward compatibility
+            adapter = VectorStoreFactory.create(
+                vector_store_type='chromadb',
+                persist_directory=self.db_directory,
+                embeddings=self.embeddings
             )
+            return adapter
+
+    @property
+    def vectorstore(self):
+        """
+        Backward compatibility property for accessing the vector store
+
+        Returns the adapter which provides the same interface as the original Chroma vectorstore
+        """
+        return self._vector_store_adapter
     
     def index_emails(self):
         """Index emails from Apple Mail and Outlook"""
@@ -1682,8 +1711,8 @@ class SharedRAG:
         try:
             # Delete from vector store
             book_name = os.path.basename(rel_path)
-            collection = self.vectorstore._collection
-            collection.delete(where={"book": book_name})
+            # Use adapter's delete method instead of direct collection access
+            self.vectorstore.delete(filter={"book": book_name})
             
             # Remove from index (thread-safe)
             with self._index_lock:
@@ -1716,7 +1745,9 @@ class SharedRAG:
                 del self._search_cache[cache_key]
         
         try:
-            search_kwargs = {"k": min(k, self.vectorstore._collection.count() or 1)}
+            # Use adapter's count method
+            count = self.vectorstore.count()
+            search_kwargs = {"k": min(k, count or 1)}
             if filter_type:
                 search_kwargs["filter"] = {"type": filter_type}
             
@@ -1924,13 +1955,12 @@ class SharedRAG:
                 # PDFs: Extract by page number
                 for page_num in page_list:
                     try:
-                        # Get all chunks from this page using ChromaDB's filter syntax
-                        results = self.vectorstore._collection.get(
-                            where={"$and": [
+                        # Get all chunks from this page using adapter's get_by_filter method
+                        results = self.vectorstore.get_by_filter(
+                            filter={"$and": [
                                 {"book": {"$eq": book_name}},
                                 {"page": {"$eq": page_num}}
-                            ]},
-                            include=["documents", "metadatas"]
+                            ]}
                         )
 
                         if results and results['documents']:
@@ -1973,10 +2003,9 @@ class SharedRAG:
             else:
                 # Non-PDFs (Word, EPUB, etc.): Extract by chunk index
                 try:
-                    # Get all chunks from this book
-                    results = self.vectorstore._collection.get(
-                        where={"book": {"$eq": book_name}},
-                        include=["documents", "metadatas"]
+                    # Get all chunks from this book using adapter's get_by_filter method
+                    results = self.vectorstore.get_by_filter(
+                        filter={"book": {"$eq": book_name}}
                     )
 
                     if results and results['documents']:
@@ -2110,10 +2139,9 @@ class SharedRAG:
 
         # Get all page numbers from the database
         try:
-            # Query for all documents from this book
-            results = self.vectorstore._collection.get(
-                where={"book": {"$eq": book_name}},
-                include=["metadatas", "ids"]
+            # Query for all documents from this book using adapter's get_by_filter method
+            results = self.vectorstore.get_by_filter(
+                filter={"book": {"$eq": book_name}}
             )
 
             # Extract unique page numbers

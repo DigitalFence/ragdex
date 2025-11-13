@@ -23,6 +23,8 @@ if SRC_ROOT.name == "src":
 ENV_BOOKS_PATH = "PERSONAL_LIBRARY_DOC_PATH"
 ENV_DB_PATH = "PERSONAL_LIBRARY_DB_PATH"
 ENV_LOGS_PATH = "PERSONAL_LIBRARY_LOGS_PATH"
+ENV_VECTOR_STORE_TYPE = "RAGDEX_VECTOR_STORE_TYPE"
+ENV_VECTOR_STORE_CONFIG_PREFIX = "RAGDEX_VECTOR_STORE"
 
 APP_NAME = "personal_doc_library"
 APP_AUTHOR = "pdlib"
@@ -77,7 +79,58 @@ class Config:
         default_path = _default_logs_path()
         target = Path(path).expanduser() if path else default_path
         return target.resolve()
-    
+
+    @property
+    def vector_store_type(self) -> str:
+        """
+        Get the vector store type
+
+        Supported types:
+        - 'chromadb' or 'chroma': ChromaDB (default)
+        - 'qdrant': QDrant vector database
+
+        Returns:
+            Vector store type identifier
+        """
+        return os.getenv(ENV_VECTOR_STORE_TYPE, 'chromadb').lower()
+
+    def get_vector_store_config(self) -> dict:
+        """
+        Get vector store configuration from environment variables
+
+        Environment variables follow the pattern:
+        RAGDEX_VECTOR_STORE_<CONFIG_KEY>=<value>
+
+        Common configuration options:
+        - RAGDEX_VECTOR_STORE_COLLECTION_NAME: Collection name (default: 'ragdex')
+        - RAGDEX_VECTOR_STORE_MODE: For QDrant - 'local', 'memory', or 'remote' (default: 'local')
+        - RAGDEX_VECTOR_STORE_URL: URL for remote vector store
+        - RAGDEX_VECTOR_STORE_API_KEY: API key for authentication
+        - RAGDEX_VECTOR_STORE_HOST: Host for remote vector store
+        - RAGDEX_VECTOR_STORE_PORT: Port for remote vector store
+
+        Returns:
+            Dictionary of configuration options
+        """
+        config = {}
+        prefix = ENV_VECTOR_STORE_CONFIG_PREFIX
+
+        # Find all environment variables with the prefix
+        for key, value in os.environ.items():
+            if key.startswith(prefix) and key != ENV_VECTOR_STORE_TYPE:
+                # Remove prefix and convert to lowercase
+                config_key = key[len(prefix) + 1:].lower()
+
+                # Try to parse as appropriate type
+                if value.lower() in ('true', 'false'):
+                    config[config_key] = value.lower() == 'true'
+                elif value.isdigit():
+                    config[config_key] = int(value)
+                else:
+                    config[config_key] = value
+
+        return config
+
     def ensure_directories(self):
         """Create directories if they don't exist"""
         for directory in [self.books_directory, self.db_directory, self.logs_directory]:
@@ -92,10 +145,15 @@ class Config:
             "books_directory": str(self.books_directory),
             "db_directory": str(self.db_directory),
             "logs_directory": str(self.logs_directory),
+            "vector_store": {
+                "type": self.vector_store_type,
+                "config": self.get_vector_store_config()
+            },
             "environment_variables": {
                 ENV_BOOKS_PATH: os.getenv(ENV_BOOKS_PATH, "Not set"),
                 ENV_DB_PATH: os.getenv(ENV_DB_PATH, "Not set"),
-                ENV_LOGS_PATH: os.getenv(ENV_LOGS_PATH, "Not set")
+                ENV_LOGS_PATH: os.getenv(ENV_LOGS_PATH, "Not set"),
+                ENV_VECTOR_STORE_TYPE: os.getenv(ENV_VECTOR_STORE_TYPE, "Not set")
             }
         }
 

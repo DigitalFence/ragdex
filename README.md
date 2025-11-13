@@ -51,6 +51,7 @@
 
 #### 🔍 Advanced Search & RAG
 - **Semantic search** with vector embeddings
+- **Multiple vector DBs** - ChromaDB, QDrant ([Guide →](VECTOR_DATABASES.md))
 - **Cross-document insights**
 - **Context-aware responses**
 - **17+ specialized MCP tools**
@@ -227,6 +228,10 @@ export PERSONAL_LIBRARY_DOC_PATH="/path/to/documents"
 export PERSONAL_LIBRARY_DB_PATH="/path/to/database"
 export PERSONAL_LIBRARY_LOGS_PATH="/path/to/logs"
 
+# Vector Database (optional - ChromaDB is default)
+export RAGDEX_VECTOR_STORE_TYPE=chromadb  # or 'qdrant'
+export RAGDEX_VECTOR_STORE_MODE=local      # For QDrant: 'local', 'memory', or 'remote'
+
 # Email settings (v0.2.0+)
 export PERSONAL_LIBRARY_INDEX_EMAILS=true
 export PERSONAL_LIBRARY_EMAIL_SOURCES=apple_mail,outlook_local
@@ -283,14 +288,18 @@ If you already have other MCP servers, add ragdex to the existing structure:
 # Document processing extras (using uv - recommended)
 uv pip install ragdex[document-processing]
 
+# Vector database backends
+uv pip install ragdex[qdrant]              # QDrant support
+uv pip install ragdex[all-vector-stores]   # All vector DBs
+
 # Service management
 uv pip install ragdex[services]
 
 # Everything
-uv pip install ragdex[document-processing,services]
+uv pip install ragdex[document-processing,services,all-vector-stores]
 
 # Alternative: standard pip
-# pip install ragdex[document-processing,services]
+# pip install ragdex[document-processing,services,qdrant]
 ```
 
 </details>
