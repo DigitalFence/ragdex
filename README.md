@@ -143,6 +143,23 @@ pip install ragdex
 
 **Don't have uv?** Install it: `curl -LsSf https://astral.sh/uv/install.sh | sh` (then close/reopen Terminal)
 
+#### 🐳 Docker Installation (Alternative)
+
+Want to run Ragdex in containers? Perfect for:
+- Clean isolated environment
+- Easy deployment and updates
+- Cross-platform consistency
+
+```bash
+# Quick start with Docker
+docker-compose up -d
+
+# Access web dashboard
+open http://localhost:8888
+```
+
+**[→ Complete Docker setup guide](DOCKER.md)** - Includes external Vector DB, Document Library, and log configuration.
+
 ### Setup Services (2-3 minutes)
 
 ```bash
