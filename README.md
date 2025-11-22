@@ -5,7 +5,7 @@
 ### Transform Your Documents & Emails into an AI-Powered Knowledge Base
 
 [![PyPI version](https://badge.fury.io/py/ragdex.svg)](https://badge.fury.io/py/ragdex)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10--3.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 [![Downloads](https://img.shields.io/pypi/dm/ragdex.svg)](https://pypi.org/project/ragdex/)
@@ -109,7 +109,7 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 **Quick Checklist** (see [Complete Prerequisites Guide →](QUICKSTART.md#-before-you-begin---complete-checklist)):
 
 - **System**: macOS 10.15+ or Linux (Ubuntu 20.04+, Debian 11+, Fedora 35+)
-- **Python**: 3.10-3.12 (NOT 3.13) - [How to check →](QUICKSTART.md#1-python-310-311-or-312)
+- **Python**: 3.10-3.13 (3.11+ recommended) - [How to check →](QUICKSTART.md#1-python-310-311-or-312)
 - **macOS Tools**: Xcode Command Line Tools - [How to install →](QUICKSTART.md#2-xcode-command-line-tools-macos-only)
 - **macOS Tools**: Homebrew - [How to install →](QUICKSTART.md#3-homebrew-macos-package-manager)
 - **Package Manager**: uv (recommended) - [How to install →](QUICKSTART.md#4-uv-fast-python-package-manager)
@@ -188,7 +188,7 @@ open http://localhost:8888
 ### Troubleshooting
 
 Having issues? Common problems and solutions:
-- **Wrong Python version?** [Install Python 3.11](QUICKSTART.md#-step-1-check-your-python-version)
+- **Wrong Python version?** [Install Python 3.11 or 3.13](QUICKSTART.md#-step-1-check-your-python-version)
 - **Claude doesn't see Ragdex?** [Check your config](QUICKSTART.md#problem-3-claude-desktop-doesnt-show-ragdex-tool)
 - **No documents indexed?** [Verify paths and permissions](QUICKSTART.md#problem-4-no-documents-found-or-0-documents-indexed)
 
@@ -202,7 +202,7 @@ Having issues? Common problems and solutions:
 
 ### System Requirements
 
-- **Python 3.10-3.12** (3.13 not supported due to dependency conflicts)
+- **Python 3.10-3.13** (3.11+ recommended for best performance)
 - **macOS** (primary) or **Linux** (Windows not yet supported)
 - **8GB RAM minimum** (16GB recommended)
   - Embedding model uses ~4GB
