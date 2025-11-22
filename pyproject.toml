@@ -43,6 +43,8 @@ dependencies = [
   "beautifulsoup4>=4.11.0",
   "mobi>=0.3.3",
   "ebooklib>=0.18",
+  "unstructured>=0.11.5",
+  "pypandoc>=1.12",
   "python-dotenv==1.0.0",
   "psutil==5.9.7",
   "flask==3.0.0",
@@ -59,10 +61,6 @@ Repository = "https://github.com/hpoliset/ragdex"
 Changelog = "https://github.com/hpoliset/ragdex/releases"
 
 [project.optional-dependencies]
-document-processing = [
-  "pypandoc==1.12",
-  "unstructured==0.11.5"
-]
 services = [
   "python-daemon>=3.0"
 ]
