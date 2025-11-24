@@ -32,6 +32,7 @@ index_monitor.log
 
 # Database and vector stores
 chroma_db/
+chroma_db_py313/
 src/core/chroma_db/
 *.sqlite3
 *.db

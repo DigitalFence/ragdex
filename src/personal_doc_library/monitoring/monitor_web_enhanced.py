@@ -1375,11 +1375,14 @@ def pause_status():
 
 def main() -> int:
     """Start the enhanced web monitor."""
+    # Allow port to be configured via environment variable
+    port = int(os.environ.get('MONITOR_PORT', '8888'))
+
     print("📚 Starting Enhanced Personal Document Library Web Monitor")
-    print("📌 Open http://localhost:8888 in your browser")
+    print(f"📌 Open http://localhost:{port} in your browser")
     print("   Press Ctrl+C to stop")
 
-    app.run(host='0.0.0.0', port=8888, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
     return 0
 
 

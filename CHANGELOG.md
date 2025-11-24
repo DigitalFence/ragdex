@@ -2,6 +2,35 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.3.1] - 2025-11-24
+
+### Added
+- **MCP Server Performance Optimization**:
+  - Background thread initialization to prevent MCP protocol timeouts
+  - `MCP_WARMUP_ON_START` environment variable for pre-initialization on server start
+  - Configurable timeouts via `MCP_INIT_TIMEOUT` and `MCP_TOOL_TIMEOUT`
+  - Graceful timeout handling with user-friendly messages
+  - Enhanced `warmup` tool with better status reporting
+- **Enhanced Installation Scripts**:
+  - Interactive Python version selection (supports 3.9-3.13)
+  - Automatic detection of Homebrew vs PATH Python installations
+  - Clear labeling of Python installation sources with full paths
+  - Improved service co-existence (source vs PyPI installations)
+  - Configurable web monitor ports (9999 for source, 8888 for PyPI)
+
+### Changed
+- **Python Version Support**: Expanded to Python 3.9-3.13 (previously 3.10-3.13)
+- **Installation Experience**: Interactive selection of Python versions with clear labels
+- **Initialization Strategy**: RAG system now initializes in background thread
+- **Default Behavior**: First tool call waits up to 15 seconds for initialization
+- **Recommended Configuration**: Set `MCP_WARMUP_ON_START=true` for production use
+
+### Fixed
+- **MCP Server Crashes**: Resolved timeout issues during embedding model loading
+- **First Tool Call Delays**: Eliminated 15-20 second delays with warmup configuration
+- **Installation Script Errors**: Fixed sed errors caused by ANSI color codes in command substitution
+- **Python Detection**: Filter out broken uv-managed Python installations
+
 ## [0.3.0] - 2025-01-23
 
 ### Added

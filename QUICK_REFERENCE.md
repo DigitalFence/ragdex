@@ -206,7 +206,10 @@ Update your `~/Library/Application Support/Claude/claude_desktop_config.json`:
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/path/to/books",
         "PERSONAL_LIBRARY_DB_PATH": "/path/to/database",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/path/to/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/path/to/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -220,6 +223,11 @@ Update your `~/Library/Application Support/Claude/claude_desktop_config.json`:
 export PERSONAL_LIBRARY_DOC_PATH="/path/to/books"
 export PERSONAL_LIBRARY_DB_PATH="/path/to/database"
 export PERSONAL_LIBRARY_LOGS_PATH="/path/to/logs"
+
+# MCP Performance (v0.3.0+)
+export MCP_WARMUP_ON_START=true       # Pre-initialize on server start
+export MCP_INIT_TIMEOUT=30            # Seconds for initialization
+export MCP_TOOL_TIMEOUT=15            # Seconds for tool timeout
 
 # Disable telemetry
 export CHROMA_TELEMETRY=false
@@ -292,10 +300,10 @@ ragdex-index &      # Start indexer
 ragdex-mcp          # Run MCP server
 
 # Option 2: Services (macOS)
-# Download and run service installer
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
-chmod +x install_ragdex_services.sh
-./install_ragdex_services.sh
+# Download and run service setup
+curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/setup_services.sh
+chmod +x setup_services.sh
+./setup_services.sh
 # Services run automatically
 
 # Option 3: Manual scripts (if using source)

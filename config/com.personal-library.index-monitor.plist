@@ -7,12 +7,12 @@
     
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/KDP/ragdex/scripts/index_monitor_service.sh</string>
+        <string>/Users/hpoliset/Development/ragdex/scripts/index_monitor_service.sh</string>
         <string>run</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/KDP/ragdex</string>
+    <string>/Users/hpoliset/Development/ragdex</string>
     
     <!-- Run at startup -->
     <key>RunAtLoad</key>
@@ -31,10 +31,10 @@
     
     <!-- Log files -->
     <key>StandardOutPath</key>
-    <string>/Users/KDP/ragdex/logs/index_monitor_stdout.log</string>
+    <string>/Users/hpoliset/Development/ragdex/logs/index_monitor_stdout.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/KDP/ragdex/logs/index_monitor_stderr.log</string>
+    <string>/Users/hpoliset/Development/ragdex/logs/index_monitor_stderr.log</string>
     
     <!-- Environment variables -->
     <key>EnvironmentVariables</key>
@@ -42,9 +42,9 @@
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>PERSONAL_LIBRARY_DOC_PATH</key>
-        <string>/Users/KDP/ragdex/books</string>
+        <string>/Users/hpoliset/Documents/Personal Library</string>
         <key>PERSONAL_LIBRARY_DB_PATH</key>
-        <string>/Users/KDP/ragdex/chroma_db</string>
+        <string>/Users/hpoliset/Development/ragdex/chroma_db</string>
     </dict>
     
     <!-- Nice value for lower priority -->

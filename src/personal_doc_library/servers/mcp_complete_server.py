@@ -10,7 +10,8 @@ import os
 import logging
 import select
 import time
-from typing import Dict, List, Any
+import threading
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 from ..core.shared_rag import SharedRAG, IndexLock
@@ -22,20 +23,153 @@ logger = logging.getLogger(__name__)
 
 class CompleteMCPServer:
     """Complete MCP server with all features"""
-    
+
+    # Configuration: Timeout settings
+    DEFAULT_INIT_TIMEOUT = 30  # seconds to wait for RAG initialization
+    DEFAULT_TOOL_TIMEOUT = 15  # seconds to wait before failing tool call
+
     def __init__(self):
         # Use configuration system for paths
         self.books_directory = str(config.books_directory)
         self.db_directory = str(config.db_directory)
-        self.rag = None  # Initialize lazily to avoid timeout
-        
-    def ensure_rag_initialized(self):
-        """Initialize RAG system if not already initialized"""
-        if self.rag is None:
-            logger.info("Initializing SharedRAG...")
-            self.rag = SharedRAG(self.books_directory, self.db_directory)
-            logger.info("SharedRAG initialized successfully")
-        
+        self.rag: Optional[SharedRAG] = None
+        self._rag_lock = threading.Lock()
+        self._rag_initializing = False
+        self._rag_init_error: Optional[str] = None
+        self._init_thread: Optional[threading.Thread] = None
+
+        # Read timeout configuration from environment
+        self.init_timeout = int(os.environ.get('MCP_INIT_TIMEOUT', self.DEFAULT_INIT_TIMEOUT))
+        self.tool_timeout = int(os.environ.get('MCP_TOOL_TIMEOUT', self.DEFAULT_TOOL_TIMEOUT))
+
+        # Check if warmup on start is requested
+        warmup_on_start = os.environ.get('MCP_WARMUP_ON_START', 'false').lower() in ('true', '1', 'yes')
+
+        # Start background initialization immediately
+        self._start_background_init()
+
+        # If warmup is requested, wait for initialization to complete
+        if warmup_on_start:
+            logger.info("MCP_WARMUP_ON_START enabled - waiting for RAG initialization...")
+            logger.info(f"Timeout: {self.init_timeout} seconds")
+            if self.ensure_rag_initialized(timeout=self.init_timeout):
+                logger.info("✅ Warmup complete - server ready to accept requests")
+            else:
+                logger.warning("⚠️  Warmup incomplete - initialization still in progress")
+                logger.warning("Server will continue initializing in background")
+
+    def _start_background_init(self):
+        """Start RAG initialization in background thread"""
+        def init_rag():
+            try:
+                with self._rag_lock:
+                    if self.rag is not None:
+                        return  # Already initialized
+                    self._rag_initializing = True
+
+                logger.info("Starting background RAG initialization...")
+                rag = SharedRAG(self.books_directory, self.db_directory)
+
+                with self._rag_lock:
+                    self.rag = rag
+                    self._rag_initializing = False
+                    self._rag_init_error = None
+                logger.info("Background RAG initialization completed successfully")
+
+            except Exception as e:
+                logger.error(f"Failed to initialize RAG: {e}", exc_info=True)
+                with self._rag_lock:
+                    self._rag_initializing = False
+                    self._rag_init_error = str(e)
+
+        self._init_thread = threading.Thread(target=init_rag, daemon=True)
+        self._init_thread.start()
+
+    def ensure_rag_initialized(self, timeout: Optional[int] = None) -> bool:
+        """
+        Ensure RAG system is initialized, waiting up to timeout seconds.
+        Returns True if initialized, False if still initializing or failed.
+
+        Args:
+            timeout: Maximum seconds to wait. If None, uses self.tool_timeout.
+        """
+        if timeout is None:
+            timeout = self.tool_timeout
+
+        # Check if already initialized
+        with self._rag_lock:
+            if self.rag is not None:
+                return True
+
+            if self._rag_init_error:
+                raise RuntimeError(f"RAG initialization failed: {self._rag_init_error}")
+
+        # Wait for background initialization
+        if self._init_thread and self._init_thread.is_alive():
+            logger.info(f"Waiting for RAG initialization (timeout: {timeout}s)...")
+            self._init_thread.join(timeout=timeout)
+
+            with self._rag_lock:
+                if self.rag is not None:
+                    logger.info("RAG initialization completed")
+                    return True
+                elif self._rag_init_error:
+                    raise RuntimeError(f"RAG initialization failed: {self._rag_init_error}")
+                else:
+                    # Still initializing after timeout
+                    logger.warning(f"RAG initialization still in progress after {timeout}s timeout")
+                    return False
+
+        # If no init thread, try to initialize synchronously
+        if self.rag is None and not self._rag_initializing:
+            logger.info("Initializing RAG synchronously (background init not running)...")
+            try:
+                with self._rag_lock:
+                    self.rag = SharedRAG(self.books_directory, self.db_directory)
+                logger.info("Synchronous RAG initialization completed")
+                return True
+            except Exception as e:
+                logger.error(f"Synchronous RAG initialization failed: {e}")
+                raise
+
+        return self.rag is not None
+
+    def ensure_rag_or_error(self, timeout: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        Ensure RAG is initialized, returning an error response if not ready.
+
+        Args:
+            timeout: Maximum seconds to wait. If None, uses self.tool_timeout.
+
+        Returns:
+            None if RAG is ready, or an error response dict if not ready.
+        """
+        try:
+            if not self.ensure_rag_initialized(timeout=timeout):
+                return {
+                    "result": {
+                        "content": [{
+                            "type": "text",
+                            "text": (
+                                "⏳ System is still initializing (loading embedding model and vector database).\n\n"
+                                f"This typically takes 15-20 seconds on first start.\n\n"
+                                "Please try again in a few seconds, or use the 'warmup' tool to check status.\n\n"
+                                "💡 Tip: Set MCP_WARMUP_ON_START=true in your Claude Desktop config to avoid this delay."
+                            )
+                        }]
+                    }
+                }
+            return None
+        except Exception as e:
+            return {
+                "result": {
+                    "content": [{
+                        "type": "text",
+                        "text": f"❌ System initialization failed: {str(e)}\n\nPlease check the MCP server logs."
+                    }]
+                }
+            }
+
     def check_and_index_if_needed(self):
         """Check for new books and index if monitor isn't running"""
         self.ensure_rag_initialized()
@@ -593,7 +727,11 @@ Show:
             arguments = params.get("arguments", {})
             
             if tool_name == "search":
-                self.ensure_rag_initialized()
+                # Check if RAG is ready, return error if not
+                error_response = self.ensure_rag_or_error()
+                if error_response:
+                    return error_response
+
                 query = arguments.get("query", "")
                 limit = arguments.get("limit", 10)
                 filter_type = arguments.get("filter_type")
@@ -718,7 +856,11 @@ Show:
                 }
             
             elif tool_name == "library_stats":
-                self.ensure_rag_initialized()
+                # Check if RAG is ready, return error if not
+                error_response = self.ensure_rag_or_error()
+                if error_response:
+                    return error_response
+
                 stats = self.rag.get_stats()
                 
                 text = f"""Library Statistics:
@@ -960,12 +1102,27 @@ Failed: {details.get('failed', 0)}"""
                 }
             
             elif tool_name == "warmup":
-                self.ensure_rag_initialized()
-                text = "✅ RAG system initialized and warmed up!\n\n"
-                text += f"📚 Books indexed: {len(self.rag.book_index)}\n"
-                text += f"🔍 Search ready: Yes\n"
-                text += f"💾 Vector store: Loaded"
-                
+                # Use longer timeout for explicit warmup requests
+                warmup_timeout = self.init_timeout
+                logger.info(f"Warmup requested (timeout: {warmup_timeout}s)...")
+
+                try:
+                    if self.ensure_rag_initialized(timeout=warmup_timeout):
+                        text = "✅ RAG system initialized and warmed up!\n\n"
+                        text += f"📚 Books indexed: {len(self.rag.book_index)}\n"
+                        text += f"🔍 Search ready: Yes\n"
+                        text += f"💾 Vector store: Loaded\n"
+                        text += f"⚙️  Initialization took: <{warmup_timeout}s"
+                    else:
+                        text = "⏳ System is still initializing...\n\n"
+                        text += f"The system is loading the embedding model and vector database.\n"
+                        text += f"This can take 15-20 seconds on first start.\n\n"
+                        text += "Please try again in a few seconds.\n\n"
+                        text += "💡 Tip: Set MCP_WARMUP_ON_START=true in your config to pre-initialize on server start."
+                except Exception as e:
+                    text = f"❌ Initialization failed: {str(e)}\n\n"
+                    text += "Please check the MCP server logs for details."
+
                 return {
                     "result": {
                         "content": [{"type": "text", "text": text}]

@@ -3,12 +3,13 @@
 ## Prerequisites Check
 
 Since you mentioned all prerequisites are installed, verify you have:
-- ✅ Python 3.10, 3.11, or 3.12 (NOT 3.13)
+- ✅ Python 3.10, 3.11, 3.12, or 3.13 (3.13 supported as of v0.3.0)
 - ✅ Homebrew
 - ✅ uv (strongly recommended)
 - ✅ Xcode Command Line Tools
 - ✅ Claude Desktop
 - ✅ Terminal with Full Disk Access permission
+- ✅ Calibre (optional, recommended for better MOBI/AZW ebook support)
 
 ---
 
@@ -35,17 +36,21 @@ Check available Python versions:
 ls -la /opt/homebrew/bin/python3* 2>/dev/null || ls -la /usr/local/bin/python3*
 
 # Check specific versions
-python3.11 --version  # Recommended
+python3.13 --version  # Latest (v0.3.0+)
 python3.12 --version
+python3.11 --version  # Recommended for stability
 python3.10 --version
 ```
 
-**Recommended: Use Python 3.11** (best performance)
+**Recommended: Use Python 3.11 or 3.13** (best compatibility and performance)
 
 ### Step 2: Create Virtual Environment with uv
 
 ```bash
-# Using Python 3.11 (recommended)
+# Using Python 3.13 (latest)
+uv venv ~/ragdex_env --python python3.13
+
+# OR using Python 3.11 (recommended for stability)
 uv venv ~/ragdex_env --python python3.11
 
 # OR using Python 3.12
@@ -71,17 +76,36 @@ deactivate
 
 **Note**: First run downloads ~2GB of AI models (5-10 minutes)
 
+### Step 3.5: Optional - Install Calibre for Enhanced Ebook Support
+
+For better MOBI, AZW, and AZW3 ebook processing:
+
+```bash
+# Install Calibre via Homebrew
+brew install calibre
+
+# Verify installation
+ebook-convert --version
+```
+
+**What this provides**:
+- Higher quality MOBI/AZW/AZW3 text extraction
+- Better metadata handling for ebooks
+- Fallback to built-in `mobi` library if Calibre unavailable
+
+**Without Calibre**: MOBI files still work using the built-in `mobi` library, but quality may vary.
+
 ### Step 4: Setup Background Services
 
 ```bash
-# Download the service installer
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
+# Download the service setup script
+curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/setup_services.sh
 
 # Make it executable
-chmod +x install_ragdex_services.sh
+chmod +x setup_services.sh
 
-# Run interactive installer
-./install_ragdex_services.sh
+# Run interactive setup
+./setup_services.sh
 ```
 
 This will prompt you for:
@@ -91,12 +115,12 @@ This will prompt you for:
 
 **Non-interactive mode** (uses defaults):
 ```bash
-./install_ragdex_services.sh --non-interactive
+./setup_services.sh --non-interactive
 ```
 
 **Custom paths**:
 ```bash
-./install_ragdex_services.sh \
+./setup_services.sh \
   --docs-path ~/MyDocuments \
   --db-path ~/MyDatabase \
   --logs-path ~/MyLogs
@@ -117,7 +141,10 @@ The installer displays the exact configuration. Add this to:
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/path/to/your/documents",
         "PERSONAL_LIBRARY_DB_PATH": "/path/to/your/database",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/path/to/your/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/path/to/your/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -188,16 +215,16 @@ $PYTHON_CMD --version
 
 ```bash
 # Interactive setup (guided)
-./install_interactive_nonservicemode.sh
+./install.sh
 
 # Fully automated with defaults
-./install_interactive_nonservicemode.sh --auto
+./install.sh --auto
 
 # Automated with custom books path
-./install_interactive_nonservicemode.sh --auto --books-path ~/MyBooks
+./install.sh --auto --books-path ~/MyBooks
 
 # Skip service installation
-./install_interactive_nonservicemode.sh --auto --no-service
+./install.sh --auto --no-service
 ```
 
 The installer will:
@@ -263,7 +290,10 @@ Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
         "PYTHONUNBUFFERED": "1",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/YOUR_USERNAME/Documents/Library",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/YOUR_USERNAME/Development/ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/YOUR_USERNAME/Development/ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/YOUR_USERNAME/Development/ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -289,33 +319,59 @@ cd ~/Development/ragdex
 
 ## 🔧 Managing Multiple Python Versions
 
-### If You Have Python 3.13 as Default
+### Python 3.13 Support (v0.3.0+)
 
-The installer will warn you that Python 3.13 is not supported by ChromaDB. You must explicitly use an older version:
+As of Ragdex v0.3.0, **Python 3.13 is fully supported** with ChromaDB 1.3.5+.
+
+**For Python 3.13 users**:
+```bash
+# Install Python 3.13 if needed
+brew install python@3.13
+
+# Create virtual environment
+uv venv ~/ragdex_env --python /opt/homebrew/bin/python3.13
+
+# Install ragdex (will use chromadb>=1.3.5)
+uv pip install --python ~/ragdex_env/bin/python ragdex
+```
+
+**Important**: Python 3.13 requires ChromaDB 1.3.5 or later, which is incompatible with older ChromaDB databases (0.4.x). If you're upgrading from an older installation:
+
+```bash
+# Backup old database
+mv ~/.ragdex/chroma_db ~/.ragdex/chroma_db.backup_$(date +%Y%m%d)
+
+# Fresh database will be created on first run
+```
+
+### If You Prefer Python 3.10-3.12
+
+For maximum stability with existing databases:
 
 ```bash
 # Check what's available
 brew list | grep python
 
-# Install Python 3.11 if not present
+# Install Python 3.11 if not present (recommended)
 brew install python@3.11
 
 # Use it explicitly
 uv venv ~/ragdex_env --python /opt/homebrew/bin/python3.11
-
-# OR create symlink (temporary)
-alias python3=/opt/homebrew/bin/python3.11
 ```
 
 ### Homebrew Python Locations
 
 **Apple Silicon (M1/M2/M3)**:
-- Python 3.11: `/opt/homebrew/bin/python3.11`
+- Python 3.13: `/opt/homebrew/bin/python3.13`
 - Python 3.12: `/opt/homebrew/bin/python3.12`
+- Python 3.11: `/opt/homebrew/bin/python3.11`
+- Python 3.10: `/opt/homebrew/bin/python3.10`
 
 **Intel Macs**:
-- Python 3.11: `/usr/local/bin/python3.11`
+- Python 3.13: `/usr/local/bin/python3.13`
 - Python 3.12: `/usr/local/bin/python3.12`
+- Python 3.11: `/usr/local/bin/python3.11`
+- Python 3.10: `/usr/local/bin/python3.10`
 
 ---
 
@@ -360,9 +416,47 @@ uv venv venv_mcp --python python3.11
 
 ### ChromaDB Compatibility Error
 
-**Issue**: `ChromaDB requires Python 3.10-3.12`
+**Issue**: `ChromaDB requires Python 3.10-3.12` (older versions)
 
-**Solution**: Reinstall with compatible Python (see above)
+**Solution**:
+- For Python 3.13: Upgrade to Ragdex v0.3.0+ which uses ChromaDB 1.3.5
+- For older Python: Use Python 3.10-3.12 (see above)
+
+### EPUB/DOCX Files Failing to Index
+
+**Issue**: `No module named 'unstructured'` or `unstructured package not found`
+
+**Root Cause**: The `unstructured` package is required for EPUB and DOCX processing but wasn't installed
+
+**Solution**:
+```bash
+# Reinstall ragdex with all dependencies
+source venv_mcp/bin/activate  # or ~/ragdex_env/bin/activate
+pip install -e .  # for source install
+# OR
+pip install --upgrade --force-reinstall ragdex  # for PyPI install
+deactivate
+
+# Verify installation
+./venv_mcp/bin/python -c "import unstructured; print('✅ unstructured installed')"
+```
+
+### MOBI Files Failing with Tuple Error
+
+**Issue**: `expected str, bytes or os.PathLike object, not tuple`
+
+**Root Cause**: Fixed in v0.3.0 - tuple unpacking bug in MOBI processing
+
+**Solution**:
+```bash
+# Upgrade to v0.3.0 or later
+git pull origin main  # for source install
+# OR
+uv pip install --upgrade ragdex  # for PyPI install
+
+# Optional: Install Calibre for better MOBI support
+brew install calibre
+```
 
 ### Service Won't Start
 
@@ -438,7 +532,7 @@ kill -9 <PID>
 
 | Aspect | PyPI Install | Source Install |
 |--------|-------------|----------------|
-| **Python Version** | Any 3.10-3.12 | Prefers 3.12 |
+| **Python Version** | Any 3.10-3.13 | Prefers 3.13 or 3.12 |
 | **Virtual Env Name** | `ragdex_env` | `venv_mcp` |
 | **Commands** | `ragdex-mcp`, `ragdex-index` | `./scripts/run.sh` |
 | **Modification** | Not recommended | Encouraged |
@@ -446,6 +540,7 @@ kill -9 <PID>
 | **Best For** | Production use | Development |
 | **Installation Location** | `~/ragdex_env` | `~/Development/ragdex` |
 | **Configuration** | `~/.ragdex/` | Project directory |
+| **ChromaDB Version** | 1.3.5+ (auto) | 1.3.5+ (auto) |
 
 ---
 
@@ -558,6 +653,12 @@ alias ragdex-warmup='~/ragdex_env/bin/python -c "from personal_doc_library.core.
 
 ## ✅ Installation Complete!
 
-You now have Ragdex installed and configured. The installation respects whatever Python 3.10-3.12 version you specify, with **Python 3.11 being the recommended choice** for optimal performance.
+You now have Ragdex installed and configured. The installation supports Python 3.10-3.13, with **Python 3.11 or 3.13 being the recommended choices** for optimal performance and compatibility.
+
+**Key Features**:
+- ✅ Python 3.13 support (v0.3.0+) with ChromaDB 1.3.5
+- ✅ Full EPUB/DOCX support via `unstructured` package
+- ✅ Fixed MOBI file processing (v0.3.0+)
+- ✅ Optional Calibre integration for enhanced ebook support
 
 **Questions or Issues?** Open an issue on GitHub or consult the troubleshooting section above.

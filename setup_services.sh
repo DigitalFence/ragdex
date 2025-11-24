@@ -180,6 +180,120 @@ if [ "$NON_INTERACTIVE" = false ]; then
     fi
 fi
 
+# Optional: Check for Calibre
+echo ""
+echo "${BLUE}📚 Optional: Enhanced Ebook Support${NC}"
+echo ""
+
+if command -v ebook-convert &> /dev/null; then
+    calibre_version=$(ebook-convert --version 2>&1 | head -n1)
+    echo -e "${GREEN}✓${NC} Calibre already installed: $calibre_version"
+else
+    echo -e "${YELLOW}!${NC} Calibre not found"
+    echo ""
+    echo -e "${BLUE}Calibre provides enhanced ebook support:${NC}"
+    echo "  • Better MOBI/AZW/AZW3 file processing"
+    echo "  • Higher quality text extraction from ebooks"
+    echo "  • Improved metadata handling"
+    echo ""
+    echo -e "${BLUE}Without Calibre:${NC} MOBI files will use built-in library (lower quality)"
+    echo ""
+
+    if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &> /dev/null; then
+        if [ "$NON_INTERACTIVE" = false ]; then
+            read -p "Install Calibre for enhanced ebook support? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "Installing Calibre via Homebrew..."
+                echo "(This may take a few minutes...)"
+                brew install calibre
+
+                if command -v ebook-convert &> /dev/null; then
+                    echo -e "${GREEN}✓${NC} Calibre installed successfully"
+                else
+                    echo -e "${YELLOW}⚠️${NC} Calibre installation may have failed"
+                    echo "   You can install it later with: brew install calibre"
+                fi
+            else
+                echo -e "${BLUE}ℹ${NC}  Skipping Calibre installation (you can install it later)"
+            fi
+        else
+            echo -e "${BLUE}ℹ${NC}  Non-interactive mode: Skipping optional Calibre installation"
+            echo "   To install later, run: brew install calibre"
+        fi
+    else
+        echo -e "${BLUE}ℹ${NC}  To install Calibre later, run: brew install calibre"
+    fi
+fi
+
+# Clean up existing PyPI installation services only
+echo ""
+echo "🧹 Checking for existing PyPI installation services..."
+
+existing_services=()
+for service in "com.ragdex.indexer" "com.ragdex.webmonitor"; do
+    if launchctl list 2>/dev/null | grep -q "$service"; then
+        existing_services+=("$service")
+    fi
+done
+
+if [ ${#existing_services[@]} -gt 0 ]; then
+    echo -e "${YELLOW}Found ${#existing_services[@]} existing service(s)${NC}"
+    for service in "${existing_services[@]}"; do
+        echo "  Unloading $service..."
+        launchctl unload ~/Library/LaunchAgents/${service}.plist 2>/dev/null || true
+        launchctl remove "$service" 2>/dev/null || true
+    done
+
+    # Remove plist files (PyPI installation only)
+    for service in "com.ragdex.indexer" "com.ragdex.webmonitor"; do
+        plist_file="$HOME/Library/LaunchAgents/${service}.plist"
+        if [ -f "$plist_file" ]; then
+            echo "  Removing $plist_file..."
+            rm -f "$plist_file"
+        fi
+    done
+    echo -e "${GREEN}✓${NC} Existing services removed"
+fi
+
+# Check if port 8888 is in use
+if lsof -Pi :8888 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  Port 8888 is already in use${NC}"
+    port_pid=$(lsof -Pi :8888 -sTCP:LISTEN -t 2>/dev/null)
+    if [ -n "$port_pid" ]; then
+        port_process=$(ps -p "$port_pid" -o comm= 2>/dev/null || echo "unknown")
+        echo "  Process using port: $port_process (PID: $port_pid)"
+        if [ "$NON_INTERACTIVE" = false ]; then
+            read -p "  Kill this process? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                kill "$port_pid" 2>/dev/null || true
+                sleep 1
+                echo -e "${GREEN}✓${NC} Process stopped"
+            else
+                echo -e "${YELLOW}⚠️  Web monitor may fail to start on port 8888${NC}"
+            fi
+        else
+            echo "  Stopping process automatically..."
+            kill "$port_pid" 2>/dev/null || true
+            sleep 1
+            echo -e "${GREEN}✓${NC} Process stopped"
+        fi
+    fi
+fi
+
+# Kill any background Python processes for this project
+echo "Checking for background processes..."
+killed_count=0
+for pid in $(ps aux | grep -E "python.*personal_doc_library\.(monitoring|indexing)|ragdex" | grep -v grep | awk '{print $2}'); do
+    echo "  Stopping process $pid..."
+    kill "$pid" 2>/dev/null || true
+    killed_count=$((killed_count + 1))
+done
+if [ $killed_count -gt 0 ]; then
+    echo -e "${GREEN}✓${NC} Stopped $killed_count background process(es)"
+fi
+
 # Create service plists
 echo ""
 echo "📝 Creating service configurations..."

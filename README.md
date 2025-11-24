@@ -146,17 +146,18 @@ pip install ragdex
 ### Setup Services (2-3 minutes)
 
 ```bash
-# Download and run interactive installer
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
-chmod +x install_ragdex_services.sh
-./install_ragdex_services.sh
+# Download and run interactive setup
+curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/setup_services.sh
+chmod +x setup_services.sh
+./setup_services.sh
 ```
 
-The installer will:
+The setup will:
 - Ask where your documents are located
-- Set up background indexing
+- Optionally install Calibre for enhanced ebook support (MOBI/AZW)
+- Set up background indexing services
 - Configure the web dashboard (localhost:8888)
-- Display a JSON configuration for Claude Desktop
+- Display Claude Desktop JSON configuration
 
 ### Configure Claude Desktop
 
@@ -232,6 +233,11 @@ export PERSONAL_LIBRARY_INDEX_EMAILS=true
 export PERSONAL_LIBRARY_EMAIL_SOURCES=apple_mail,outlook_local
 export PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=365
 export PERSONAL_LIBRARY_EMAIL_EXCLUDED_FOLDERS=Spam,Junk,Trash
+
+# MCP Performance (v0.3.0+)
+export MCP_WARMUP_ON_START=true       # Pre-initialize on server start (recommended)
+export MCP_INIT_TIMEOUT=30            # Seconds to wait for initialization
+export MCP_TOOL_TIMEOUT=15            # Seconds to wait before timing out tool calls
 ```
 
 ### Claude Desktop Configuration Example
@@ -251,7 +257,10 @@ If this is your first MCP server, your `claude_desktop_config.json` should look 
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/yourname/Documents",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/yourname/.ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -473,7 +482,7 @@ open http://localhost:8888
 tail -f ~/Library/Logs/ragdex_*.log
 
 # Reinstall services with fresh configs
-./install_ragdex_services.sh
+./setup_services.sh
 ```
 
 **"Unload failed: 5: Input/output error" on macOS?**

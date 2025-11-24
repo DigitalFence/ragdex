@@ -1443,12 +1443,12 @@ pip install ragdex
 
 The easiest way to configure Ragdex is using the automated installer:
 
-#### 1. Download the installer script
+#### 1. Download the setup script
 
 ```bash
 cd ~
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
-chmod +x install_ragdex_services.sh
+curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/setup_services.sh
+chmod +x setup_services.sh
 ```
 
 **Expected output:**
@@ -1458,10 +1458,10 @@ chmod +x install_ragdex_services.sh
 100 15432  100 15432    0     0  89234      0 --:--:-- --:--:-- --:--:-- 89234
 ```
 
-#### 2. Run the interactive installer
+#### 2. Run the interactive setup
 
 ```bash
-./install_ragdex_services.sh
+./setup_services.sh
 ```
 
 The installer will ask you several questions:
@@ -1496,7 +1496,10 @@ Copy the JSON below and add it to your Claude Desktop config file...
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/yourname/Documents",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/yourname/.ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -1551,7 +1554,10 @@ If the file is empty or new, paste the entire JSON configuration from the instal
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/yourname/Documents",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/yourname/.ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
