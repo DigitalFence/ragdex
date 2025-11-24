@@ -74,3 +74,13 @@ ragdex-web = "personal_doc_library.monitoring.monitor_web_enhanced:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/personal_doc_library"]
+
+[tool.hatch.build]
+exclude = [
+  "test_env_*",
+  "chroma_db_*",
+  ".git*",
+  "logs/",
+  "books/",
+  "*.log"
+]

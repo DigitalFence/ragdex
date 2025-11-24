@@ -8,6 +8,7 @@ env/
 venv/
 venv_mcp/
 venv_mcp_x86_backup/
+test_env_*/
 ENV/
 env.bak/
 venv.bak/
