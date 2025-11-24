@@ -130,7 +130,16 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 
 ```bash
 # Using uv (⭐ STRONGLY RECOMMENDED)
+# Option 1: Use default Python
 uv venv ~/ragdex_env
+uv pip install --python ~/ragdex_env/bin/python ragdex
+
+# Option 2: Specify Python version (3.9-3.13 supported)
+uv venv --python 3.13 ~/ragdex_env
+uv pip install --python ~/ragdex_env/bin/python ragdex
+
+# Option 3: Use specific Python executable
+uv venv --python python3.13 ~/ragdex_env
 uv pip install --python ~/ragdex_env/bin/python ragdex
 
 # Alternative: pip (slower, requires activation)
@@ -138,6 +147,8 @@ python3 -m venv ~/ragdex_env
 source ~/ragdex_env/bin/activate
 pip install ragdex
 ```
+
+**Supported Python versions:** 3.9, 3.10, 3.11, 3.12, 3.13
 
 **Note**: First run downloads ~2GB of AI models (5-10 min). [Details](QUICKSTART.md#-first-run-model-download)
 

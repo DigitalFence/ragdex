@@ -27,26 +27,126 @@ pip install -e .
 pip install -e ".[document-processing,services]"
 ```
 
+## Installation with Specific Python Version
+
+### Using uv (Recommended)
+
+```bash
+# Option 1: Specify version number (uv will find it)
+uv venv --python 3.13 ragdex_env
+source ragdex_env/bin/activate
+
+# Option 2: Specify exact Python executable
+uv venv --python python3.13 ragdex_env
+source ragdex_env/bin/activate
+
+# Option 3: Use full path to Python
+uv venv --python /opt/homebrew/opt/python@3.13/bin/python3.13 ragdex_env
+source ragdex_env/bin/activate
+
+# Install ragdex
+uv pip install ragdex
+```
+
+**Supported Python versions:** 3.9, 3.10, 3.11, 3.12, 3.13
+
 ## Command-Line Tools (After Installation)
 
-### Main CLI Commands
+### 1. `ragdex` - Main CLI Tool
+**Purpose:** Configuration and management utility
+
 ```bash
-# Configuration and setup
-ragdex --help                       # Show all commands
-ragdex ensure-dirs                  # Create necessary directories
-ragdex config                       # View configuration
-
-# Service launchers
-ragdex-mcp                          # Start MCP server
-ragdex-index                        # Start background indexer
-ragdex-web                          # Start web dashboard (localhost:8888)
-
-# Utilities
-ragdex index-status                 # Check indexing progress
-ragdex find-unindexed               # Find unindexed documents
-ragdex manage-failed                 # Manage failed documents
-ragdex config                       # Display detailed config
+ragdex --help                       # Show all available subcommands
+ragdex config                       # Configure library paths and settings
+ragdex ensure-dirs                  # Create required directory structure
+ragdex index-status                 # Check indexing status
+ragdex find-unindexed               # Find documents not yet indexed
+ragdex fix-skipped                  # Retry failed document processing
+ragdex manage-failed                # View and manage failed documents
 ```
+
+**When to use:** Initial setup, checking status, troubleshooting
+
+---
+
+### 2. `ragdex-mcp` - MCP Server
+**Purpose:** Model Context Protocol server for Claude Desktop integration
+
+This is the **main service** that Claude connects to. It provides 17 MCP tools for searching and analyzing your document library.
+
+```bash
+# Run manually for testing
+ragdex-mcp
+
+# In Claude Desktop config
+"command": "/path/to/your/venv/bin/ragdex-mcp"
+```
+
+**Features:**
+- Background thread initialization (v0.3.1+)
+- Configurable warmup with `MCP_WARMUP_ON_START`
+- 17 MCP tools (search, find_practices, compare_perspectives, etc.)
+- Handles RAG queries from Claude
+
+**When to use:**
+- Configured in Claude Desktop (runs automatically)
+- Manual testing of MCP server startup
+
+---
+
+### 3. `ragdex-index` - Background Indexer
+**Purpose:** Monitors document directory and automatically indexes new/modified files
+
+This **indexing service** watches for changes and processes documents in the background.
+
+```bash
+# Run manually
+ragdex-index
+
+# Installed as service via
+./setup_services.sh              # PyPI installation
+./install.sh --with-services     # Source installation
+```
+
+**What it does:**
+- Watches document directory for changes
+- Automatically processes PDFs, Word docs, EPUBs, MOBI, emails
+- Extracts text and generates embeddings
+- Updates ChromaDB vector database
+- Tracks failed documents
+
+**When to use:**
+- Install as background service for automatic indexing
+- Run manually for one-time indexing
+
+---
+
+### 4. `ragdex-web` - Web Dashboard
+**Purpose:** Web-based monitoring interface
+
+View real-time indexing progress and library statistics at http://localhost:8888 (PyPI) or http://localhost:9999 (source).
+
+```bash
+# Run manually
+ragdex-web
+
+# Installed as service via
+./setup_services.sh              # Port 8888
+./install.sh --with-services     # Port 9999
+```
+
+**Features:**
+- Real-time indexing progress
+- Library statistics (books, chunks, categories)
+- Recently indexed documents
+- Failed document tracking
+- Search functionality with Enter key support
+
+**When to use:**
+- Monitor indexing progress
+- Browse library statistics
+- Debug failed documents
+- Search your library via web interface
 
 ## Traditional Scripts (Alternative)
 
