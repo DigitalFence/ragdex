@@ -8,6 +8,7 @@ env/
 venv/
 venv_mcp/
 venv_mcp_x86_backup/
+test_env_*/
 ENV/
 env.bak/
 venv.bak/
@@ -32,6 +33,7 @@ index_monitor.log
 
 # Database and vector stores
 chroma_db/
+chroma_db_py313/
 src/core/chroma_db/
 *.sqlite3
 *.db

@@ -50,7 +50,7 @@ trap cleanup SIGTERM SIGINT SIGQUIT
 check_venv() {
     if [[ ! -f "$PYTHON_CMD" ]]; then
         log "ERROR: Python not found at $PYTHON_CMD"
-        log "Please run serviceInstall.sh first"
+        log "Please run install.sh first"
         exit 1
     fi
     echo "$PYTHON_CMD"

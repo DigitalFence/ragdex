@@ -29,7 +29,7 @@ fi
 # Check Python exists
 if [ ! -f "$PYTHON_CMD" ]; then
     echo -e "${RED}❌ Python not found at $PYTHON_CMD!${NC}"
-    echo "   Please run ./serviceInstall.sh first"
+    echo "   Please run ./install.sh first"
     exit 1
 fi
 

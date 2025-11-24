@@ -658,7 +658,7 @@ class MOBILoader:
             if not documents:
                 try:
                     import mobi
-                    tempdir = mobi.extract(self.file_path)
+                    tempdir, _ = mobi.extract(self.file_path)
                 except (ImportError, Exception) as e:
                     # If mobi library fails, try a simpler approach
                     logger.warning(f"MOBI extraction failed: {e}")

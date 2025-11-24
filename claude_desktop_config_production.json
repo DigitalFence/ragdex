@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "ragdex-production": {
+      "command": "/Users/hpoliset/Development/ragdex/venv_mcp/bin/ragdex-mcp",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "CHROMA_TELEMETRY": "false",
+        "PERSONAL_LIBRARY_DOC_PATH": "/Users/hpoliset/Documents/Personal Library",
+        "PERSONAL_LIBRARY_DB_PATH": "/Users/hpoliset/.ragdex/chroma_db",
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/hpoliset/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
+      }
+    }
+  }
+}

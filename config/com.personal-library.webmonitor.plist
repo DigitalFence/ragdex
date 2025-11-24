@@ -7,11 +7,11 @@
     
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/KDP/ragdex/scripts/webmonitor_service.sh</string>
+        <string>/Users/hpoliset/Development/ragdex/scripts/webmonitor_service.sh</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/KDP/ragdex</string>
+    <string>/Users/hpoliset/Development/ragdex</string>
     
     <!-- Run at startup -->
     <key>RunAtLoad</key>
@@ -30,10 +30,10 @@
     
     <!-- Log files -->
     <key>StandardOutPath</key>
-    <string>/Users/KDP/ragdex/logs/webmonitor_stdout.log</string>
+    <string>/Users/hpoliset/Development/ragdex/logs/webmonitor_stdout.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/KDP/ragdex/logs/webmonitor_stderr.log</string>
+    <string>/Users/hpoliset/Development/ragdex/logs/webmonitor_stderr.log</string>
     
     <!-- Environment variables -->
     <key>EnvironmentVariables</key>
@@ -43,9 +43,9 @@
         <key>PYTHONUNBUFFERED</key>
         <string>1</string>
         <key>PERSONAL_LIBRARY_DOC_PATH</key>
-        <string>/Users/KDP/ragdex/books</string>
+        <string>/Users/hpoliset/Documents/Personal Library</string>
         <key>PERSONAL_LIBRARY_DB_PATH</key>
-        <string>/Users/KDP/ragdex/chroma_db</string>
+        <string>/Users/hpoliset/Development/ragdex/chroma_db</string>
     </dict>
     
     <!-- Nice value for lower priority -->

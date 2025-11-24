@@ -37,7 +37,7 @@ fi
 # Check if virtual environment exists
 if [ ! -d "$PROJECT_ROOT/venv_mcp" ]; then
     echo "❌ Virtual environment not found at $PROJECT_ROOT/venv_mcp!"
-    echo "   Please run ./serviceInstall.sh first."
+    echo "   Please run ./install.sh first."
     exit 1
 fi
 

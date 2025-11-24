@@ -71,7 +71,7 @@ fi
 # Check if virtual environment exists
 if [ ! -d "$VENV_DIR" ]; then
     echo "❌ Error: Virtual environment not found at $VENV_DIR!"
-    echo "   Please run ./serviceInstall.sh first."
+    echo "   Please run ./install.sh first."
     exit 1
 fi
 
@@ -84,7 +84,7 @@ PYTHON_CMD="$VENV_DIR/bin/python"
 # Verify Python exists
 if [ ! -f "$PYTHON_CMD" ]; then
     echo "❌ Python not found at $PYTHON_CMD"
-    echo "   Please run ./serviceInstall.sh first"
+    echo "   Please run ./install.sh first"
     exit 1
 fi
 

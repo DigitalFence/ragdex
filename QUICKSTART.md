@@ -85,9 +85,9 @@ Both Intel (x86_64) and Apple Silicon (ARM64/M1/M2/M3) are fully supported.
 
 ## 🛠️ Required Software & Tools
 
-### 1. Python (3.10, 3.11, or 3.12)
+### 1. Python (3.10, 3.11, 3.12, or 3.13)
 
-**⚠️ CRITICAL**: Python 3.13 is **NOT supported** (dependency conflicts)
+**✅ SUPPORTED VERSIONS**: Python 3.10-3.13 (3.11+ recommended for best performance)
 
 #### Check your Python version:
 
@@ -97,10 +97,10 @@ python3 --version
 
 **Expected output:**
 ```
-Python 3.10.x, 3.11.x, or 3.12.x
+Python 3.10.x, 3.11.x, 3.12.x, or 3.13.x
 ```
 
-**❌ If you see `Python 3.13.x`, `3.9.x`, or lower**, you need to install a compatible version (see below).
+**❌ If you see `Python 3.9.x` or lower**, you need to install a compatible version (see below).
 
 #### Why specific versions?
 
@@ -108,31 +108,35 @@ Python 3.10.x, 3.11.x, or 3.12.x
 |---------|--------|--------|
 | 3.9 or lower | ❌ Not supported | Missing required features |
 | 3.10 | ✅ Supported | Stable, well-tested |
-| 3.11 | ✅ **Recommended** | Best performance |
-| 3.12 | ✅ Supported | Latest stable |
-| 3.13 | ❌ **Not supported** | ChromaDB not compatible |
+| 3.11 | ✅ **Recommended** | Best performance & compatibility |
+| 3.12 | ✅ Supported | Latest features |
+| 3.13 | ✅ **Supported** | Modern dependencies (v0.3.0+) |
 
 <details>
-<summary>📦 How to Install Python 3.11 (if needed)</summary>
+<summary>📦 How to Install Python 3.11 or 3.13 (if needed)</summary>
 
 #### On macOS:
 
 **Prerequisites**: Homebrew must be installed (see Homebrew section below)
 
 ```bash
-# Install Python 3.11
+# Install Python 3.11 (recommended)
 brew install python@3.11
+
+# Or install Python 3.13 (latest)
+brew install python@3.13
 
 # Verify installation
 /opt/homebrew/bin/python3.11 --version
+# Or: /opt/homebrew/bin/python3.13 --version
 ```
 
 **Expected output:**
 ```
-Python 3.11.x
+Python 3.11.x or Python 3.13.x
 ```
 
-**Note**: On Intel Macs, the path may be `/usr/local/bin/python3.11`
+**Note**: On Intel Macs, the path may be `/usr/local/bin/python3.11` or `/usr/local/bin/python3.13`
 
 #### On Linux (Ubuntu/Debian):
 
@@ -140,11 +144,17 @@ Python 3.11.x
 # Update package list
 sudo apt update
 
-# Install Python 3.11 with development tools
+# Install Python 3.11 with development tools (recommended)
 sudo apt install python3.11 python3.11-venv python3.11-dev
+
+# Or install Python 3.13 (latest, may need PPA)
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.13 python3.13-venv python3.13-dev
 
 # Verify installation
 python3.11 --version
+# Or: python3.13 --version
 ```
 
 #### On Linux (Fedora/RHEL/CentOS):
@@ -1433,12 +1443,12 @@ pip install ragdex
 
 The easiest way to configure Ragdex is using the automated installer:
 
-#### 1. Download the installer script
+#### 1. Download the setup script
 
 ```bash
 cd ~
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
-chmod +x install_ragdex_services.sh
+curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/setup_services.sh
+chmod +x setup_services.sh
 ```
 
 **Expected output:**
@@ -1448,10 +1458,10 @@ chmod +x install_ragdex_services.sh
 100 15432  100 15432    0     0  89234      0 --:--:-- --:--:-- --:--:-- 89234
 ```
 
-#### 2. Run the interactive installer
+#### 2. Run the interactive setup
 
 ```bash
-./install_ragdex_services.sh
+./setup_services.sh
 ```
 
 The installer will ask you several questions:
@@ -1486,7 +1496,10 @@ Copy the JSON below and add it to your Claude Desktop config file...
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/yourname/Documents",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/yourname/.ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -1541,7 +1554,10 @@ If the file is empty or new, paste the entire JSON configuration from the instal
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/yourname/Documents",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/yourname/.ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }

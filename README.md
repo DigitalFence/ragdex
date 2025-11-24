@@ -5,7 +5,7 @@
 ### Transform Your Documents & Emails into an AI-Powered Knowledge Base
 
 [![PyPI version](https://badge.fury.io/py/ragdex.svg)](https://badge.fury.io/py/ragdex)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10--3.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 [![Downloads](https://img.shields.io/pypi/dm/ragdex.svg)](https://pypi.org/project/ragdex/)
@@ -109,7 +109,7 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 **Quick Checklist** (see [Complete Prerequisites Guide →](QUICKSTART.md#-before-you-begin---complete-checklist)):
 
 - **System**: macOS 10.15+ or Linux (Ubuntu 20.04+, Debian 11+, Fedora 35+)
-- **Python**: 3.10-3.12 (NOT 3.13) - [How to check →](QUICKSTART.md#1-python-310-311-or-312)
+- **Python**: 3.10-3.13 (3.11+ recommended) - [How to check →](QUICKSTART.md#1-python-310-311-or-312)
 - **macOS Tools**: Xcode Command Line Tools - [How to install →](QUICKSTART.md#2-xcode-command-line-tools-macos-only)
 - **macOS Tools**: Homebrew - [How to install →](QUICKSTART.md#3-homebrew-macos-package-manager)
 - **Package Manager**: uv (recommended) - [How to install →](QUICKSTART.md#4-uv-fast-python-package-manager)
@@ -130,7 +130,16 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 
 ```bash
 # Using uv (⭐ STRONGLY RECOMMENDED)
+# Option 1: Use default Python
 uv venv ~/ragdex_env
+uv pip install --python ~/ragdex_env/bin/python ragdex
+
+# Option 2: Specify Python version (3.9-3.13 supported)
+uv venv --python 3.13 ~/ragdex_env
+uv pip install --python ~/ragdex_env/bin/python ragdex
+
+# Option 3: Use specific Python executable
+uv venv --python python3.13 ~/ragdex_env
 uv pip install --python ~/ragdex_env/bin/python ragdex
 
 # Alternative: pip (slower, requires activation)
@@ -139,6 +148,8 @@ source ~/ragdex_env/bin/activate
 pip install ragdex
 ```
 
+**Supported Python versions:** 3.9, 3.10, 3.11, 3.12, 3.13
+
 **Note**: First run downloads ~2GB of AI models (5-10 min). [Details](QUICKSTART.md#-first-run-model-download)
 
 **Don't have uv?** Install it: `curl -LsSf https://astral.sh/uv/install.sh | sh` (then close/reopen Terminal)
@@ -146,17 +157,18 @@ pip install ragdex
 ### Setup Services (2-3 minutes)
 
 ```bash
-# Download and run interactive installer
-curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/install_ragdex_services.sh
-chmod +x install_ragdex_services.sh
-./install_ragdex_services.sh
+# Download and run interactive setup
+curl -O https://raw.githubusercontent.com/hpoliset/ragdex/main/setup_services.sh
+chmod +x setup_services.sh
+./setup_services.sh
 ```
 
-The installer will:
+The setup will:
 - Ask where your documents are located
-- Set up background indexing
+- Optionally install Calibre for enhanced ebook support (MOBI/AZW)
+- Set up background indexing services
 - Configure the web dashboard (localhost:8888)
-- Display a JSON configuration for Claude Desktop
+- Display Claude Desktop JSON configuration
 
 ### Configure Claude Desktop
 
@@ -188,7 +200,7 @@ open http://localhost:8888
 ### Troubleshooting
 
 Having issues? Common problems and solutions:
-- **Wrong Python version?** [Install Python 3.11](QUICKSTART.md#-step-1-check-your-python-version)
+- **Wrong Python version?** [Install Python 3.11 or 3.13](QUICKSTART.md#-step-1-check-your-python-version)
 - **Claude doesn't see Ragdex?** [Check your config](QUICKSTART.md#problem-3-claude-desktop-doesnt-show-ragdex-tool)
 - **No documents indexed?** [Verify paths and permissions](QUICKSTART.md#problem-4-no-documents-found-or-0-documents-indexed)
 
@@ -202,7 +214,7 @@ Having issues? Common problems and solutions:
 
 ### System Requirements
 
-- **Python 3.10-3.12** (3.13 not supported due to dependency conflicts)
+- **Python 3.10-3.13** (3.11+ recommended for best performance)
 - **macOS** (primary) or **Linux** (Windows not yet supported)
 - **8GB RAM minimum** (16GB recommended)
   - Embedding model uses ~4GB
@@ -232,6 +244,11 @@ export PERSONAL_LIBRARY_INDEX_EMAILS=true
 export PERSONAL_LIBRARY_EMAIL_SOURCES=apple_mail,outlook_local
 export PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=365
 export PERSONAL_LIBRARY_EMAIL_EXCLUDED_FOLDERS=Spam,Junk,Trash
+
+# MCP Performance (v0.3.0+)
+export MCP_WARMUP_ON_START=true       # Pre-initialize on server start (recommended)
+export MCP_INIT_TIMEOUT=30            # Seconds to wait for initialization
+export MCP_TOOL_TIMEOUT=15            # Seconds to wait before timing out tool calls
 ```
 
 ### Claude Desktop Configuration Example
@@ -251,7 +268,10 @@ If this is your first MCP server, your `claude_desktop_config.json` should look 
         "CHROMA_TELEMETRY": "false",
         "PERSONAL_LIBRARY_DOC_PATH": "/Users/yourname/Documents",
         "PERSONAL_LIBRARY_DB_PATH": "/Users/yourname/.ragdex/chroma_db",
-        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs"
+        "PERSONAL_LIBRARY_LOGS_PATH": "/Users/yourname/.ragdex/logs",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -473,7 +493,7 @@ open http://localhost:8888
 tail -f ~/Library/Logs/ragdex_*.log
 
 # Reinstall services with fresh configs
-./install_ragdex_services.sh
+./setup_services.sh
 ```
 
 **"Unload failed: 5: Input/output error" on macOS?**

@@ -51,6 +51,11 @@ while [[ $# -gt 0 ]]; do
             AUTO_DB_PATH="$2"
             shift 2
             ;;
+        --with-services)
+            AUTO_INSTALL_SERVICE=true
+            AUTO_START_WEB=true
+            shift
+            ;;
         --no-service)
             AUTO_INSTALL_SERVICE=false
             shift
@@ -67,7 +72,8 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --auto                Run in automatic mode with defaults"
+            echo "  --auto                Run in automatic mode with defaults and services"
+            echo "  --with-services       Install background indexing and web monitor services"
             echo "  --books-path PATH     Set books directory path"
             echo "  --db-path PATH        Set database directory path"
             echo "  --no-service          Don't install background service (with --auto)"
@@ -143,18 +149,18 @@ prompt_directory() {
     local prompt="$1"
     local default="$2"
     local response
-    
+
     # In auto mode, use default or provided path
     if [ "$AUTO_MODE" = true ]; then
-        echo -e "  Auto: Using $default"
+        echo -e "  Auto: Using $default" >&2
         echo "$default"
         return
     fi
-    
-    echo -e "${CYAN}$prompt${NC}"
-    echo -e "Default: ${YELLOW}$default${NC}"
+
+    echo -e "${CYAN}$prompt${NC}" >&2
+    echo -e "Default: ${YELLOW}$default${NC}" >&2
     read -p "Path (press Enter for default): " response
-    
+
     if [ -z "$response" ]; then
         echo "$default"
     else
@@ -170,74 +176,173 @@ echo ""
 python_cmd=""
 python_version=""
 
-# First check for Python 3.12 specifically
-if command -v python3.12 &> /dev/null; then
-    python_version=$(python3.12 --version 2>&1 | cut -d' ' -f2)
-    echo -e "  ${GREEN}✓${NC} Python 3.12 found: $python_version"
-    python_cmd="python3.12"
-elif command -v python3 &> /dev/null; then
-    python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
-    major_version=$(echo $python_version | cut -d'.' -f1)
-    minor_version=$(echo $python_version | cut -d'.' -f2)
-    
-    if [[ "$major_version" == "3" && "$minor_version" == "12" ]]; then
-        echo -e "  ${GREEN}✓${NC} Python 3.12 found: $python_version"
-        python_cmd="python3"
-    elif [[ "$major_version" == "3" && "$minor_version" -gt "12" ]]; then
-        echo -e "  ${YELLOW}⚠️${NC} Python $python_version found, but Python 3.12 is required (3.13+ not supported by ChromaDB)"
-        python_cmd=""
+# Helper function to test if a Python installation is usable
+test_python() {
+    local py_path="$1"
+    # Test if it can create a venv without errors (check for broken uv installations)
+    if "$py_path" -c "import sys; sys.exit(0 if sys.base_prefix != '/install' else 1)" 2>/dev/null; then
+        return 0
     else
-        echo -e "  ${YELLOW}⚠️${NC} Python $python_version found, but Python 3.12 is required"
-        python_cmd=""
+        # Log when filtering out broken installations
+        echo "  ⚠️  Skipping broken Python installation at $py_path (appears to be uv-managed)" >&2
+        return 1
     fi
-elif command -v python &> /dev/null; then
-    python_version=$(python --version 2>&1 | cut -d' ' -f2)
-    if [[ "$python_version" == 3.12.* ]]; then
-        echo -e "  ${GREEN}✓${NC} Python 3.12 found: $python_version"
-        python_cmd="python"
+}
+
+# Detect all available Python 3.9-3.13 installations
+declare -a python_paths=()
+declare -a python_versions=()
+declare -a python_labels=()
+
+# Check for Python 3.13-3.9 (newest to oldest)
+for minor in 13 12 11 10 9; do
+    # Check Homebrew installations first (prefer these)
+    for brew_base in "/opt/homebrew/opt" "/usr/local/opt"; do
+        brew_path="$brew_base/python@3.$minor/bin/python3.$minor"
+        if [ -x "$brew_path" ] && test_python "$brew_path"; then
+            version=$("$brew_path" --version 2>&1 | cut -d' ' -f2)
+            python_paths+=("$brew_path")
+            python_versions+=("$version")
+            python_labels+=("Python $version - Homebrew ($brew_path)")
+        fi
+    done
+
+    # Check system/PATH installations
+    if command -v python3.$minor &> /dev/null; then
+        py_path=$(command -v python3.$minor)
+        # Skip if already added as Homebrew installation
+        already_added=false
+        for existing in "${python_paths[@]}"; do
+            if [ "$existing" = "$py_path" ]; then
+                already_added=true
+                break
+            fi
+        done
+
+        if [ "$already_added" = false ] && test_python "python3.$minor"; then
+            version=$(python3.$minor --version 2>&1 | cut -d' ' -f2)
+            python_paths+=("python3.$minor")
+            python_versions+=("$version")
+            python_labels+=("Python $version - PATH ($py_path)")
+        fi
+    fi
+done
+
+# Check default python3 if it's in the supported range
+if command -v python3 &> /dev/null; then
+    py_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+    major=$(echo $py_version | cut -d'.' -f1)
+    minor=$(echo $py_version | cut -d'.' -f2)
+
+    if [[ "$major" == "3" && "$minor" -ge "9" && "$minor" -le "13" ]]; then
+        py_path=$(command -v python3)
+        # Skip if already added
+        already_added=false
+        for existing in "${python_paths[@]}"; do
+            if [ "$existing" = "$py_path" ]; then
+                already_added=true
+                break
+            fi
+        done
+
+        if [ "$already_added" = false ] && test_python "python3"; then
+            python_paths+=("python3")
+            python_versions+=("$py_version")
+            python_labels+=("Python $py_version - Default ($py_path)")
+        fi
     fi
 fi
 
-# If Python 3.12 not found, offer to install it
-if [ -z "$python_cmd" ]; then
-    echo -e "  ${RED}✗${NC} Python 3.12 is required but not found"
+# Present options to user
+num_pythons=${#python_paths[@]}
+
+if [ $num_pythons -eq 0 ]; then
+    echo -e "  ${RED}✗${NC} No suitable Python installation found"
     echo ""
-    
+    echo "Python 3.9-3.13 is required (Python 3.14+ not supported due to onnxruntime)"
+elif [ $num_pythons -eq 1 ]; then
+    # Only one Python found, use it
+    echo -e "  ${GREEN}✓${NC} ${python_labels[0]} found"
+    python_cmd="${python_paths[0]}"
+    python_version="${python_versions[0]}"
+else
+    # Multiple Pythons found, let user choose
+    echo -e "${GREEN}Found ${num_pythons} compatible Python installations:${NC}"
+    echo ""
+    for i in "${!python_paths[@]}"; do
+        num=$((i + 1))
+        echo "  $num) ${python_labels[$i]}"
+    done
+    echo ""
+
+    if [ "$AUTO_MODE" = true ]; then
+        # In auto mode, use the first one (newest)
+        echo -e "  ${CYAN}Auto mode: Using ${python_labels[0]}${NC}"
+        python_cmd="${python_paths[0]}"
+        python_version="${python_versions[0]}"
+    else
+        # Ask user to choose
+        while true; do
+            read -p "Select Python version (1-$num_pythons) [1]: " choice
+            choice=${choice:-1}
+
+            if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$num_pythons" ]; then
+                idx=$((choice - 1))
+                python_cmd="${python_paths[$idx]}"
+                python_version="${python_versions[$idx]}"
+                echo -e "  ${GREEN}✓${NC} Using ${python_labels[$idx]}"
+                break
+            else
+                echo -e "  ${RED}Invalid choice. Please enter a number between 1 and $num_pythons${NC}"
+            fi
+        done
+    fi
+fi
+
+# If no suitable Python found, offer to install Python 3.13
+if [ -z "$python_cmd" ]; then
+    echo -e "  ${RED}✗${NC} Python 3.9-3.13 is required but not found"
+    echo ""
+
     if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &> /dev/null; then
-        echo -e "${CYAN}Python 3.12 is required for ChromaDB compatibility${NC}"
-        
+        echo -e "${CYAN}Python 3.9-3.13 is required (3.13 recommended)${NC}"
+
         # In auto mode, install automatically; otherwise ask
         if [ "$AUTO_MODE" = true ]; then
-            echo "  Auto: Installing Python 3.12 via Homebrew..."
+            echo "  Auto: Installing Python 3.13 via Homebrew..."
             install_python=true
-        elif prompt_yes_no "Install Python 3.12 via Homebrew?" "y"; then
+        elif prompt_yes_no "Install Python 3.13 via Homebrew?" "y"; then
             install_python=true
         else
             install_python=false
         fi
-        
+
         if [ "$install_python" = true ]; then
-            echo "  Installing Python 3.12..."
-            brew install python@3.12 >/dev/null 2>&1
-            
+            echo "  Installing Python 3.13..."
+            brew install python@3.13 >/dev/null 2>&1
+
             # Verify installation
-            if command -v python3.12 &> /dev/null; then
-                python_cmd="python3.12"
-                python_version=$(python3.12 --version 2>&1 | cut -d' ' -f2)
-                echo -e "  ${GREEN}✓${NC} Python 3.12 installed successfully: $python_version"
+            if [ -x "/opt/homebrew/opt/python@3.13/bin/python3.13" ]; then
+                python_cmd="/opt/homebrew/opt/python@3.13/bin/python3.13"
+                python_version=$("$python_cmd" --version 2>&1 | cut -d' ' -f2)
+                echo -e "  ${GREEN}✓${NC} Python 3.13 installed successfully: $python_version"
+            elif command -v python3.13 &> /dev/null; then
+                python_cmd="python3.13"
+                python_version=$(python3.13 --version 2>&1 | cut -d' ' -f2)
+                echo -e "  ${GREEN}✓${NC} Python 3.13 installed successfully: $python_version"
             else
-                echo -e "  ${RED}✗${NC} Failed to install Python 3.12"
-                echo "  Please install it manually: brew install python@3.12"
+                echo -e "  ${RED}✗${NC} Failed to install Python 3.13"
+                echo "  Please install it manually: brew install python@3.13"
                 exit 1
             fi
         else
-            echo "  Please install Python 3.12 manually and try again"
-            echo "  On macOS: brew install python@3.12"
+            echo "  Please install Python 3.9-3.13 manually and try again"
+            echo "  On macOS: brew install python@3.13"
             exit 1
         fi
     else
-        echo "  Please install Python 3.12 and try again"
-        echo "  On macOS: brew install python@3.12"
+        echo "  Please install Python 3.9-3.13 and try again"
+        echo "  Recommended: Python 3.13"
         exit 1
     fi
 fi
@@ -291,42 +396,92 @@ echo ""
 echo -e "${BLUE}📌 Installing Python dependencies...${NC}"
 echo ""
 
-if [ -f "${PROJECT_ROOT}/requirements.txt" ]; then
-    echo "  Installing core dependencies..."
-    
+if [ -f "${PROJECT_ROOT}/pyproject.toml" ]; then
+    echo "  Installing ragdex and all dependencies from pyproject.toml..."
+
     # First ensure pip is up to date
     "${venv_path}/bin/python" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1
-    
-    # Install dependencies with better error handling
-    echo "  Installing langchain and document processing libraries..."
-    "${venv_path}/bin/python" -m pip install --no-cache-dir \
-        langchain==0.1.0 \
-        langchain-community==0.0.10 \
-        chromadb==0.4.22 \
-        sentence-transformers \
-        pypdf2==3.0.1 \
-        pypandoc==1.12 2>/dev/null
-    
-    echo "  Installing additional document support..."
-    "${venv_path}/bin/python" -m pip install --no-cache-dir \
-        unstructured \
-        python-docx \
-        pypdf \
-        openpyxl \
-        pdfminer.six \
-        python-dotenv \
-        psutil \
-        flask \
-        'numpy<2.0' 2>/dev/null
-    
+
+    # Install in editable mode with all dependencies
+    echo "  This will install:"
+    echo "    • ChromaDB 1.3.5+ (Python 3.13 compatible)"
+    echo "    • Langchain 0.3+ for RAG"
+    echo "    • Unstructured for EPUB/DOCX support"
+    echo "    • All other dependencies"
+    echo ""
+
+    "${venv_path}/bin/python" -m pip install -e "${PROJECT_ROOT}" 2>&1 | grep -v "^Requirement already satisfied" || true
+
+    if [ $? -eq 0 ]; then
+        echo -e "  ${GREEN}✓${NC} Ragdex and dependencies installed successfully"
+    else
+        echo -e "  ${YELLOW}⚠️${NC} Some dependencies may have failed to install"
+        echo "     You can try manual installation with: pip install -e ."
+    fi
+elif [ -f "${PROJECT_ROOT}/requirements.txt" ]; then
+    echo "  Installing dependencies from requirements.txt..."
+
+    # First ensure pip is up to date
+    "${venv_path}/bin/python" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1
+
+    "${venv_path}/bin/python" -m pip install -r "${PROJECT_ROOT}/requirements.txt" 2>&1 | grep -v "^Requirement already satisfied" || true
+
     if [ $? -eq 0 ]; then
         echo -e "  ${GREEN}✓${NC} Dependencies installed successfully"
     else
         echo -e "  ${YELLOW}⚠️${NC} Some dependencies may have failed to install"
-        echo "     You can try manual installation later with: pip install -r requirements.txt"
     fi
 else
-    echo -e "  ${YELLOW}⚠️${NC} requirements.txt not found"
+    echo -e "  ${YELLOW}⚠️${NC} Neither pyproject.toml nor requirements.txt found"
+fi
+
+# Optional features
+echo ""
+echo -e "${BLUE}📌 Optional Features...${NC}"
+echo ""
+
+# Check for Calibre and offer to install
+if command -v ebook-convert &> /dev/null; then
+    calibre_version=$(ebook-convert --version 2>&1 | head -n1)
+    echo -e "  ${GREEN}✓${NC} Calibre already installed: $calibre_version"
+else
+    echo -e "  ${YELLOW}!${NC} Calibre not found"
+    echo ""
+    echo -e "${CYAN}Calibre provides enhanced ebook support:${NC}"
+    echo "  • Better MOBI/AZW/AZW3 file processing"
+    echo "  • Higher quality text extraction from ebooks"
+    echo "  • Improved metadata handling"
+    echo ""
+    echo -e "${CYAN}Without Calibre:${NC} MOBI files will use built-in library (lower quality)"
+    echo ""
+
+    if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &> /dev/null; then
+        if [ "$AUTO_MODE" = true ]; then
+            echo "  Auto mode: Skipping Calibre installation (optional)"
+            install_calibre=false
+        elif prompt_yes_no "Install Calibre for enhanced ebook support?" "n"; then
+            install_calibre=true
+        else
+            install_calibre=false
+        fi
+
+        if [ "$install_calibre" = true ]; then
+            echo "  Installing Calibre via Homebrew..."
+            echo "  (This may take a few minutes...)"
+            brew install calibre
+
+            if command -v ebook-convert &> /dev/null; then
+                echo -e "  ${GREEN}✓${NC} Calibre installed successfully"
+            else
+                echo -e "  ${YELLOW}⚠️${NC} Calibre installation may have failed"
+                echo "     You can install it later with: brew install calibre"
+            fi
+        else
+            echo -e "  ${CYAN}ℹ${NC}  Skipping Calibre installation (you can install it later)"
+        fi
+    else
+        echo -e "  ${CYAN}ℹ${NC}  To install Calibre later, run: brew install calibre"
+    fi
 fi
 
 # Configure directories
@@ -384,28 +539,100 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo ""
     echo -e "${BLUE}📌 Service Installation${NC}"
     echo ""
+
+    # Clean up existing source installation services only
+    echo "Checking for existing source installation services..."
+    existing_services=()
+    for service in "com.personal-library.index-monitor" "com.personal-library.webmonitor"; do
+        if launchctl list 2>/dev/null | grep -q "$service"; then
+            existing_services+=("$service")
+        fi
+    done
+
+    if [ ${#existing_services[@]} -gt 0 ]; then
+        echo -e "${YELLOW}Found ${#existing_services[@]} existing service(s)${NC}"
+        for service in "${existing_services[@]}"; do
+            echo "  Unloading $service..."
+            launchctl unload ~/Library/LaunchAgents/${service}.plist 2>/dev/null || true
+            launchctl remove "$service" 2>/dev/null || true
+        done
+
+        # Remove plist files (source installation only)
+        for service in "com.personal-library.index-monitor" "com.personal-library.webmonitor"; do
+            plist_file="$HOME/Library/LaunchAgents/${service}.plist"
+            if [ -f "$plist_file" ]; then
+                echo "  Removing $plist_file..."
+                rm -f "$plist_file"
+            fi
+        done
+        echo -e "${GREEN}✓${NC} Existing services removed"
+        echo ""
+    fi
+
+    # Check if port 9999 is in use
+    if lsof -Pi :9999 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠️  Port 9999 is already in use${NC}"
+        port_pid=$(lsof -Pi :9999 -sTCP:LISTEN -t 2>/dev/null)
+        if [ -n "$port_pid" ]; then
+            port_process=$(ps -p "$port_pid" -o comm= 2>/dev/null || echo "unknown")
+            echo "  Process using port: $port_process (PID: $port_pid)"
+            if [ "$AUTO_MODE" = false ]; then
+                read -p "  Kill this process? (y/N): " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    kill "$port_pid" 2>/dev/null || true
+                    sleep 1
+                    echo -e "${GREEN}✓${NC} Process stopped"
+                else
+                    echo -e "${YELLOW}⚠️  Web monitor may fail to start on port 9999${NC}"
+                fi
+            else
+                echo "  Stopping process automatically..."
+                kill "$port_pid" 2>/dev/null || true
+                sleep 1
+                echo -e "${GREEN}✓${NC} Process stopped"
+            fi
+        fi
+        echo ""
+    fi
+
+    # Kill any background Python processes for this project
+    echo "Checking for background processes..."
+    killed_count=0
+    for pid in $(ps aux | grep -E "python.*personal_doc_library\.(monitoring|indexing)" | grep -v grep | awk '{print $2}'); do
+        echo "  Stopping process $pid..."
+        kill "$pid" 2>/dev/null || true
+        killed_count=$((killed_count + 1))
+    done
+    if [ $killed_count -gt 0 ]; then
+        echo -e "${GREEN}✓${NC} Stopped $killed_count background process(es)"
+        echo ""
+    fi
+
     echo "The system can run background services to:"
     echo "  • Automatically index new documents"
     echo "  • Provide a web monitoring dashboard"
     echo ""
-    
+
     if prompt_yes_no "Install background indexing service?" "y"; then
         echo "Installing index monitor service..."
         "${PROJECT_ROOT}/scripts/install_service.sh"
     fi
     
     if prompt_yes_no "Start web monitoring dashboard?" "y"; then
-        echo "Starting web monitor on http://localhost:8888..."
+        echo "Starting web monitor on http://localhost:9999..."
         if [ "$USE_CENTRALIZED_CONFIG" = true ]; then
             nohup env PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
+                MONITOR_PORT=9999 \
                 "$PYTHON_CMD" -m personal_doc_library.monitoring.monitor_web_enhanced \
                 > "${PROJECT_ROOT}/logs/webmonitor_stdout.log" 2>&1 &
         else
             nohup env PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
+                MONITOR_PORT=9999 \
                 "$venv_path/bin/python" -m personal_doc_library.monitoring.monitor_web_enhanced \
                 > "${PROJECT_ROOT}/logs/webmonitor_stdout.log" 2>&1 &
         fi
-        echo -e "${GREEN}✓${NC} Web monitor started"
+        echo -e "${GREEN}✓${NC} Web monitor started on port 9999"
     fi
 fi
 
@@ -499,7 +726,7 @@ echo -e "${CYAN}🚀 Quick Commands:${NC}"
 echo "  • Run MCP server: ./scripts/run.sh"
 echo "  • Index documents: ./scripts/run.sh --index-only"
 echo "  • Check status: ./scripts/service_status.sh"
-echo "  • Web monitor: http://localhost:8888"
+echo "  • Web monitor: http://localhost:9999"
 echo ""
 echo -e "${CYAN}📖 Documentation:${NC}"
 echo "  • README.md - Getting started guide"

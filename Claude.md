@@ -68,9 +68,9 @@ The system follows a **modular, service-oriented architecture**:
 
 ```bash
 # Initial setup
-./install_interactive_nonservicemode.sh  # Interactive setup (non-service mode)
-./serviceInstall.sh              # Complete setup with service installation
-pip install -r requirements.txt # Install dependencies (if manual setup)
+./install.sh                     # Interactive setup (source installation)
+./setup_services.sh              # Setup services after PyPI installation
+pip install -r requirements.txt  # Install dependencies (if manual setup)
 
 # Running the system
 ./scripts/run.sh                # Run MCP server (default mode)
@@ -100,6 +100,7 @@ python -m personal_doc_library.monitoring.monitor_web_enhanced  # Start web dash
 
 **Critical**: Must use `venv_mcp` virtual environment with absolute paths:
 
+### Minimal Configuration
 ```json
 {
   "mcpServers": {
@@ -109,6 +110,27 @@ python -m personal_doc_library.monitoring.monitor_web_enhanced  # Start web dash
       "env": {
         "PYTHONPATH": "/path/to/your/ragdex/src",
         "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
+
+### Recommended Production Configuration
+**Includes warmup to avoid 15-20 second delay on first tool call:**
+
+```json
+{
+  "mcpServers": {
+    "personal-library": {
+      "command": "/path/to/your/ragdex/venv_mcp/bin/python",
+      "args": ["-m", "personal_doc_library.servers.mcp_complete_server"],
+      "env": {
+        "PYTHONPATH": "/path/to/your/ragdex/src",
+        "PYTHONUNBUFFERED": "1",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
@@ -291,7 +313,7 @@ When enhancing existing scripts:
 
 Before (monolithic):
 ```bash
-# install_ragdex_services.sh lines 71-100
+# setup_services.sh lines 71-100
 # Mixed discovery, validation, and path setting
 if command -v ragdex-mcp &> /dev/null; then
     RAGDEX_MCP_PATH=$(which ragdex-mcp)
@@ -372,7 +394,7 @@ SOLID-compliant code is easier to test:
 
 ```bash
 # test_install_script.sh
-source install_ragdex_services.sh
+source setup_services.sh
 
 # Test individual functions (SRP makes this possible)
 test_validate_executable() {
@@ -431,9 +453,30 @@ test_create_directory_safe
 
 ## Environment Variables
 
+### Path Configuration
 - `PERSONAL_LIBRARY_DOC_PATH` - Override books directory
-- `PERSONAL_LIBRARY_DB_PATH` - Override database directory  
+- `PERSONAL_LIBRARY_DB_PATH` - Override database directory
 - `PERSONAL_LIBRARY_LOGS_PATH` - Override logs directory
+
+### MCP Server Performance Configuration
+- `MCP_WARMUP_ON_START` - Pre-initialize RAG system on server start (default: false)
+  - Set to `true` to avoid 15-20 second initialization delay on first tool call
+  - Recommended for production use
+  - Example: `"MCP_WARMUP_ON_START": "true"`
+
+- `MCP_INIT_TIMEOUT` - Maximum seconds to wait for RAG initialization (default: 30)
+  - Used during server startup warmup
+  - Increase if embedding model loading is slow on your system
+  - Example: `"MCP_INIT_TIMEOUT": "45"`
+
+- `MCP_TOOL_TIMEOUT` - Maximum seconds to wait before failing tool calls (default: 15)
+  - Used when RAG isn't yet initialized and tool is called
+  - User gets friendly "still initializing" message if timeout is exceeded
+  - Example: `"MCP_TOOL_TIMEOUT": "20"`
+
+### Web Monitor Configuration
+- `MONITOR_PORT` - Override web monitor port (default: 8888 for PyPI, 9999 for source)
+  - Example: `"MONITOR_PORT": "7777"`
 
 ## Best Practices
 

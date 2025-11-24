@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ragdex-python313": {
+      "command": "$(pwd)/venv_mcp/bin/ragdex-mcp",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "CHROMA_TELEMETRY": "false",
+        "PERSONAL_LIBRARY_DOC_PATH": "/Users/hpoliset/Documents/Personal Library",
+        "PERSONAL_LIBRARY_DB_PATH": "$(pwd)/chroma_db",
+        "PERSONAL_LIBRARY_LOGS_PATH": "$(pwd)/logs",
+        "_COMMENT": "Performance optimization - pre-initialize RAG system on server start",
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
+      }
+    }
+  }
+}
