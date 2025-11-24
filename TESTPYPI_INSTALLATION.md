@@ -45,7 +45,7 @@ uv pip install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple/ \
   --index-strategy unsafe-best-match \
-  ragdex==0.3.1
+  ragdex==0.3.2
 ```
 
 **Note:** The `--index-strategy unsafe-best-match` flag is required because ragdex exists on both TestPyPI and PyPI, and we want to install the TestPyPI version.
@@ -107,7 +107,7 @@ uv pip install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple/ \
   --index-strategy unsafe-best-match \
-  ragdex==0.3.1
+  ragdex==0.3.2
 ```
 
 ### "Requires-Python >=3.9,<3.14"
@@ -130,7 +130,7 @@ pip list | grep ragdex
 
 Should show:
 ```
-ragdex    0.3.1
+ragdex    0.3.2
 ```
 
 ## After Testing
