@@ -183,6 +183,8 @@ test_python() {
     if "$py_path" -c "import sys; sys.exit(0 if sys.base_prefix != '/install' else 1)" 2>/dev/null; then
         return 0
     else
+        # Log when filtering out broken installations
+        echo "  ⚠️  Skipping broken Python installation at $py_path (appears to be uv-managed)" >&2
         return 1
     fi
 }
