@@ -53,13 +53,17 @@ uv pip install \
 ### 5. Verify installation
 
 ```bash
-# Check version
-ragdex --version
-
 # Verify all CLI commands exist
+which ragdex
 which ragdex-mcp
 which ragdex-index
 which ragdex-web
+
+# Check CLI help
+ragdex --help
+
+# Verify package version
+pip show ragdex | grep Version
 
 # Test Python imports
 python -c "from personal_doc_library.servers.mcp_complete_server import CompleteMCPServer; print('✅ MCP Server import OK')"
