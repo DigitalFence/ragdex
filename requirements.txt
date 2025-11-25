@@ -7,8 +7,6 @@ pypdf2==3.0.1
 pypdf
 
 # Document processing (always included for EPUB/DOCX support)
-unstructured>=0.11.5  # Required for EPUB and DOCX files
-pypandoc>=1.12
 numpy>=1.24,<3.0  # Python 3.13 compatible
 python-docx>=1.1.0
 openpyxl
@@ -16,6 +14,11 @@ pdfminer.six
 beautifulsoup4>=4.11.0
 mobi>=0.3.3
 ebooklib>=0.18
+
+# Optional: Legacy .doc file support (requires LibreOffice installed on system)
+# Install with: pip install ragdex[doc-support]
+# unstructured>=0.11.5
+# pypandoc>=1.12
 
 # Email support
 emlx>=1.0.0
