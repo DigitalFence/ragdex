@@ -1158,13 +1158,27 @@ Failed: {details.get('failed', 0)}"""
             
             elif tool_name == "refresh_cache":
                 self.ensure_rag_initialized()
-                # Reload the book index
-                self.rag.load_book_index()
-                
+                # Reload the book index from disk
+                self.rag.book_index = self.rag.load_book_index()
+
+                # Reload the vector store to pick up new documents
+                logger.info("Reloading vector store...")
+                self.rag.vectorstore = self.rag.initialize_vectorstore()
+
+                # Clear the search cache
+                self.rag._search_cache.clear()
+
+                # Clear the category cache (v0.3.4+)
+                if hasattr(self.rag, '_category_cache'):
+                    self.rag._category_cache = {'counts': {}, 'timestamp': 0}
+
                 text = "✅ Cache refreshed successfully!\n\n"
                 text += f"📚 Total books: {len(self.rag.book_index)}\n"
-                text += f"📊 Total chunks: {sum(info.get('chunks', 0) for info in self.rag.book_index.values())}"
-                
+                text += f"📊 Total chunks: {sum(info.get('chunks', 0) for info in self.rag.book_index.values())}\n"
+                text += f"🔄 Vector store: Reloaded\n"
+                text += f"🗑️  Search cache: Cleared\n"
+                text += f"🗑️  Category cache: Cleared"
+
                 return {
                     "result": {
                         "content": [{"type": "text", "text": text}]

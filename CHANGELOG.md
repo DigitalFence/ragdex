@@ -2,6 +2,29 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.3.5] - 2025-01-25 - Fix refresh_cache Command
+
+### Fixed
+- **refresh_cache Tool**: Fixed critical bug where newly indexed documents didn't appear in searches
+  - Previously: `load_book_index()` result was not assigned, leaving stale data in memory
+  - Previously: Vector store was never reloaded, so new documents remained invisible
+  - Now: Properly reloads book index, vector store, and clears all caches
+  - **Impact**: Users can now see newly indexed documents without restarting the MCP server
+
+### Enhanced
+- **Cache Management**: refresh_cache now clears all caches comprehensively
+  - Reloads book index from disk
+  - Reloads vector store to pick up new documents
+  - Clears search cache (5-minute TTL cache)
+  - Clears category cache (5-minute TTL cache, introduced in v0.3.4)
+  - Provides detailed feedback on what was refreshed
+
+### Technical Details
+- Fixed assignment: `self.rag.book_index = self.rag.load_book_index()`
+- Added vector store reload: `self.rag.vectorstore = self.rag.initialize_vectorstore()`
+- Backward compatible: Safely handles missing `_category_cache` attribute
+- Originally reported in PR #4
+
 ## [0.3.4] - 2025-01-25 - MCP Server Query Performance
 
 ### Added
