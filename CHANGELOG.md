@@ -2,6 +2,59 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.3.6] - 2025-01-25 - Bug Fixes, Subfolder Search, and Pagination
+
+### Fixed
+- **book_pages Tool**: Fixed ChromaDB API error caused by invalid 'ids' parameter in include list
+  - Error: `Expected include item to be one of documents, embeddings, metadatas, distances, uris, data, got ids`
+  - Solution: Removed 'ids' from include parameter, use metadatas for count calculation
+  - **Impact**: book_pages tool now works correctly to retrieve page information
+
+- **Search Validation**: Fixed crashes when documents have None or empty page_content
+  - Added validation to skip invalid documents during search result processing
+  - Prevents `1 validation error for Document page_content` exceptions
+  - **Impact**: Search operations more robust against corrupted/malformed documents
+
+- **extract_pages Tool**: Enhanced flexibility and reliability
+  - Now accepts string page numbers (e.g., "0", "5", "10-15") in addition to integers
+  - Automatically falls back to chunk extraction when page numbers unavailable
+  - Properly handles single-page PDFs and resume documents indexed without page metadata
+  - **Impact**: Resume PDFs and documents without page numbers now extractable
+
+### Added
+- **Subfolder Search Filtering**: New `folder` parameter for search tool
+  - Filter searches by folder path (e.g., "DigitalFence", "DigitalFence/OU students resumes")
+  - Supports partial folder matching (case-insensitive substring match)
+  - Post-processing implementation for ChromaDB compatibility
+  - **Usage**: `search(query="...", folder="DigitalFence")`
+  - **Note**: Requires re-indexing existing documents to use this feature
+
+- **Pagination Support for list_books**: New `offset` parameter for paginating large result sets
+  - Navigate through results in pages (e.g., offset=0 for page 1, offset=50 for page 2)
+  - Limit capped at 200 books per page for performance
+  - Intelligent pagination hints show next page command
+  - **Usage**: `list_books(pattern="...", limit=100, offset=0)`
+  - **Impact**: Can now browse through libraries with 100+ books efficiently
+
+### Enhanced
+- **Document Metadata**: Added new metadata fields during indexing
+  - `folder`: Directory path relative to library root (e.g., "DigitalFence/OU students resumes")
+  - `rel_path`: Full relative path including filename
+  - **Impact**: Enables folder-based filtering and better document organization
+
+### Technical Details
+- ChromaDB post-processing filter for folder search (workaround for missing $contains operator)
+- Intelligent fallback strategy: page-based extraction → chunk-based extraction
+- String page number parsing with range support ("1", "5", "10-15")
+- Backward compatible with existing indexed documents (folder search unavailable until re-indexed)
+
+### Migration Notes
+- **Re-indexing Required**: Existing documents need re-indexing to use folder search
+  - New documents: Automatically get folder metadata during indexing
+  - Existing documents: Will continue to work but won't have folder metadata
+  - Full re-index: `rm -rf chroma_db/* && re-index all documents`
+- **MCP Server Restart**: Restart Claude Desktop to load updated code
+
 ## [0.3.5] - 2025-01-25 - Fix refresh_cache Command
 
 ### Fixed

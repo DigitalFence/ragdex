@@ -328,6 +328,10 @@ class CompleteMCPServer:
                                 "book": {
                                     "type": "string",
                                     "description": "Optional: Search within a specific book (partial title match, case-insensitive)"
+                                },
+                                "folder": {
+                                    "type": "string",
+                                    "description": "Optional: Restrict search to a specific folder (e.g., 'DigitalFence' or 'DigitalFence/OU students resumes')"
                                 }
                             },
                             "required": ["query"]
@@ -472,8 +476,8 @@ class CompleteMCPServer:
                         }
                     },
                     {
-                        "name": "list_books", 
-                        "description": "List books in the library by author, title pattern, or directory",
+                        "name": "list_books",
+                        "description": "List books in the library by author, title pattern, or directory. Supports pagination for large result sets.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -482,13 +486,18 @@ class CompleteMCPServer:
                                     "description": "Search pattern to match book titles/paths (case-insensitive, supports partial matches)"
                                 },
                                 "author": {
-                                    "type": "string", 
+                                    "type": "string",
                                     "description": "Author name or directory to filter by"
                                 },
                                 "limit": {
                                     "type": "integer",
-                                    "description": "Maximum number of books to return (default: 50)",
+                                    "description": "Maximum number of books to return per page (default: 50, max: 200)",
                                     "default": 50
+                                },
+                                "offset": {
+                                    "type": "integer",
+                                    "description": "Number of books to skip for pagination (default: 0). Use with limit for paging: offset=0 for page 1, offset=50 for page 2, etc.",
+                                    "default": 0
                                 }
                             }
                         }
@@ -807,32 +816,33 @@ Show:
                 filter_type = arguments.get("filter_type")
                 synthesize = arguments.get("synthesize", False)
                 book = arguments.get("book")
-                
+                folder = arguments.get("folder")
+
                 # If a book is specified, filter results to that book
                 if book:
                     # Find matching book
                     book_lower = book.lower()
                     matching_books = []
-                    
+
                     for book_path in self.rag.book_index.keys():
                         if book_lower in book_path.lower():
                             matching_books.append(os.path.basename(book_path))
-                    
+
                     if not matching_books:
                         return {
                             "result": {
                                 "content": [{"type": "text", "text": f"No books found matching '{book}'"}]
                             }
                         }
-                    
+
                     # If multiple matches, use the first one
                     book_name = matching_books[0]
-                    
-                    # Search with book filter
-                    all_results = self.rag.search(query, limit * 3, filter_type, synthesize)
+
+                    # Search with book filter and optional folder filter
+                    all_results = self.rag.search(query, limit * 3, filter_type, synthesize, folder)
                     results = [r for r in all_results if r.get('source', '').startswith(book_name)][:limit]
                 else:
-                    results = self.rag.search(query, limit, filter_type, synthesize)
+                    results = self.rag.search(query, limit, filter_type, synthesize, folder)
                 
                 # Enhanced formatting for article writing
                 text = f"Found {len(results)} relevant passages for query: '{query}'\n\n"
@@ -1215,50 +1225,80 @@ Failed: {details.get('failed', 0)}"""
             
             elif tool_name == "list_books":
                 self.ensure_rag_initialized()
-                
+
                 pattern = arguments.get("pattern", "")
-                author = arguments.get("author", "")  
-                limit = arguments.get("limit", 50)
-                
+                author = arguments.get("author", "")
+                limit = min(arguments.get("limit", 50), 200)  # Cap at 200
+                offset = max(arguments.get("offset", 0), 0)  # Ensure non-negative
+
                 # Get all books
                 all_books = list(self.rag.book_index.keys())
                 matching_books = []
-                
+
                 for book_path in all_books:
                     book_name = os.path.basename(book_path)
                     book_dir = os.path.dirname(book_path)
-                    
+
                     # Apply filters
                     if pattern and pattern.lower() not in book_path.lower():
                         continue
                     if author and author.lower() not in book_dir.lower():
                         continue
-                        
+
                     matching_books.append((book_path, book_name, self.rag.book_index[book_path]))
-                
+
                 # Sort by name
                 matching_books.sort(key=lambda x: x[1])
-                
-                # Apply limit
-                truncated = len(matching_books) > limit
-                matching_books = matching_books[:limit]
-                
-                if not matching_books:
+
+                # Calculate pagination
+                total_matching = len(matching_books)
+
+                # Check if offset is out of bounds
+                if offset >= total_matching and total_matching > 0:
+                    text = f"⚠️ Offset {offset} is beyond the total of {total_matching} matching books.\n"
+                    text += f"Try offset values between 0 and {max(0, total_matching - 1)}."
+                    return {
+                        "result": {
+                            "content": [{"type": "text", "text": text}]
+                        }
+                    }
+
+                # Apply pagination
+                paginated_books = matching_books[offset:offset + limit]
+                has_more = (offset + limit) < total_matching
+
+                if not paginated_books:
                     text = "No books found matching the criteria."
                 else:
+                    # Calculate display range
+                    start_idx = offset + 1
+                    end_idx = min(offset + len(paginated_books), total_matching)
+
                     text = "📚 Matching Books:\n\n"
-                    for i, (book_path, book_name, book_info) in enumerate(matching_books, 1):
+                    for i, (book_path, book_name, book_info) in enumerate(paginated_books, start_idx):
                         text += f"{i}. **{book_name}**\n"
                         text += f"   📁 Path: {book_path}\n"
                         text += f"   📄 Chunks: {book_info.get('chunks', 'Unknown')}\n"
                         if 'indexed_at' in book_info:
                             text += f"   🕐 Indexed: {book_info['indexed_at']}\n"
                         text += "\n"
-                    
-                    text += f"Total: {len(matching_books)} book(s)"
-                    if truncated:
-                        text += f" (showing first {limit})"
-                    text += f" from library of {len(all_books)} books"
+
+                    # Pagination summary
+                    text += f"📊 Showing books {start_idx}-{end_idx} of {total_matching} matching"
+                    if pattern or author:
+                        text += f" (filtered from {len(all_books)} total books)"
+                    else:
+                        text += " books"
+
+                    # Pagination hints
+                    if has_more:
+                        next_offset = offset + limit
+                        text += f"\n\n💡 To see more, use: list_books("
+                        if pattern:
+                            text += f'pattern="{pattern}", '
+                        if author:
+                            text += f'author="{author}", '
+                        text += f"offset={next_offset}, limit={limit})"
                 
                 return {
                     "result": {
