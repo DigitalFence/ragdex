@@ -4,18 +4,7 @@ Shared RAG System for Personal Document Library
 Common functionality used by both MCP server and background indexer
 """
 
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    UnstructuredWordDocumentLoader,
-    UnstructuredEPubLoader,
-    UnstructuredPowerPointLoader
-)
-from langchain.schema import Document
-import pypdf
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-# from langchain_community.llms import Ollama  # Removed for direct RAG results
+# Standard library imports
 import os
 import logging
 import torch
@@ -29,15 +18,51 @@ from datetime import datetime
 from pathlib import Path
 import fcntl
 from contextlib import contextmanager
-from .config import config
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import psutil
 import threading
 from collections import OrderedDict
 import difflib
 
+# Setup logging first
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Core langchain imports
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    UnstructuredEPubLoader,
+    UnstructuredPowerPointLoader
+)
+from langchain.schema import Document
+import pypdf
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+# from langchain_community.llms import Ollama  # Removed for direct RAG results
+
+# Project imports
+from .config import config
+
+# Optional import for .doc/.docx support
+try:
+    from langchain_community.document_loaders import UnstructuredWordDocumentLoader
+    WORD_LOADER_AVAILABLE = True
+except ImportError:
+    WORD_LOADER_AVAILABLE = False
+    logger.warning(
+        "UnstructuredWordDocumentLoader not available. "
+        "Legacy .doc file support requires: pip install 'ragdex[doc-support]' "
+        "and LibreOffice installed on your system. "
+        ".docx files will still work with python-docx."
+    )
+
+# Fallback for .docx files when unstructured is not available
+try:
+    from langchain_community.document_loaders import Docx2txtLoader
+    DOCX_FALLBACK_AVAILABLE = True
+except ImportError:
+    DOCX_FALLBACK_AVAILABLE = False
 
 class IndexLock:
     """File-based locking to prevent simultaneous indexing with stale lock detection"""
@@ -1049,11 +1074,33 @@ class SharedRAG:
     def get_document_loader(self, filepath):
         """Get the appropriate document loader based on file extension"""
         file_ext = os.path.splitext(filepath)[1].lower()
-        
+
         if file_ext == '.pdf':
             return OCRPDFLoader(filepath)  # Use OCR-enabled PDF loader
         elif file_ext in ['.docx', '.doc']:
-            return UnstructuredWordDocumentLoader(filepath)
+            # Handle Word documents with graceful fallback
+            if file_ext == '.doc' and not WORD_LOADER_AVAILABLE:
+                # Legacy .doc format requires optional dependencies
+                raise ValueError(
+                    f"Legacy .doc file support requires optional dependencies. "
+                    f"Install with: pip install 'ragdex[doc-support]' "
+                    f"and ensure LibreOffice is installed on your system. "
+                    f"File: {os.path.basename(filepath)}"
+                )
+            elif file_ext == '.docx' and not WORD_LOADER_AVAILABLE:
+                # .docx can use fallback loader with python-docx
+                if DOCX_FALLBACK_AVAILABLE:
+                    logger.info(f"Using Docx2txtLoader fallback for {os.path.basename(filepath)}")
+                    return Docx2txtLoader(filepath)
+                else:
+                    raise ValueError(
+                        f"No Word document loader available. "
+                        f"Install with: pip install 'ragdex[doc-support]' "
+                        f"File: {os.path.basename(filepath)}"
+                    )
+            else:
+                # UnstructuredWordDocumentLoader is available
+                return UnstructuredWordDocumentLoader(filepath)
         elif file_ext == '.epub':
             return UnstructuredEPubLoader(filepath)
         elif file_ext in ['.mobi', '.azw', '.azw3']:
@@ -1331,16 +1378,17 @@ class SharedRAG:
                 raise Exception("No result from document loader")
             
             documents = result_queue.get()
-            
+
             if not documents:
                 raise Exception(f"No content extracted from {doc_type}")
-            
+
             # For non-PDF documents, we don't have page count, so use document count
             total_sections = len(documents)
             logger.info(f"Loaded {total_sections} sections from {rel_path}")
             self.update_progress("extracting", total_pages=total_sections, current_file=rel_path)
-            
+
             # Split into chunks with optimized parameters
+            chunk_start = time.perf_counter()
             logger.info(f"Splitting {rel_path} into chunks...")
             self.update_progress("chunking", total_pages=total_sections, current_file=rel_path)
             text_splitter = RecursiveCharacterTextSplitter(
@@ -1349,48 +1397,73 @@ class SharedRAG:
                 separators=["\n\n", "\n", ". ", " ", ""],
                 length_function=len
             )
-            
+
             chunks = text_splitter.split_documents(documents)
-            logger.info(f"Created {len(chunks)} chunks from {rel_path}")
+            chunk_time = time.perf_counter() - chunk_start
+            logger.info(f"Created {len(chunks)} chunks from {rel_path} in {chunk_time:.2f}s")
             self.update_progress("chunking", total_pages=total_sections, chunks_generated=len(chunks), current_file=rel_path)
             
-            # Add metadata
+            # Add metadata - optimized for performance
+            metadata_start = time.perf_counter()
+            indexed_at = datetime.now().isoformat()
+            book_name = os.path.basename(filepath)
+
+            # Pre-compile categorization keywords for faster lookup
+            practice_keywords = {'meditation', 'mindfulness', 'breath', 'breathing'}
+            energy_keywords = {'energy', 'chakra', 'healing', 'aura'}
+            philosophy_keywords = {'conscious', 'awareness', 'enlighten', 'spiritual'}
+
             for chunk in chunks:
-                chunk.metadata['book'] = os.path.basename(filepath)
+                chunk.metadata['book'] = book_name
                 chunk.metadata['document_type'] = doc_type
-                chunk.metadata['indexed_at'] = datetime.now().isoformat()
-                
-                # Categorize content
-                content = chunk.page_content.lower()
-                if any(word in content for word in ['meditation', 'mindfulness', 'breath', 'breathing']):
+                chunk.metadata['indexed_at'] = indexed_at
+
+                # Optimized categorization using set intersection
+                content_lower = chunk.page_content.lower()
+                content_words = set(content_lower.split())
+
+                if content_words & practice_keywords:
                     chunk.metadata['type'] = 'practice'
-                elif any(word in content for word in ['energy', 'chakra', 'healing', 'aura']):
+                elif content_words & energy_keywords:
                     chunk.metadata['type'] = 'energy_work'
-                elif any(word in content for word in ['conscious', 'awareness', 'enlighten', 'spiritual']):
+                elif content_words & philosophy_keywords:
                     chunk.metadata['type'] = 'philosophy'
                 else:
                     chunk.metadata['type'] = 'general'
+
+            metadata_time = time.perf_counter() - metadata_start
+            logger.info(f"Added metadata to {len(chunks)} chunks in {metadata_time:.2f}s")
             
             # Remove old chunks if re-indexing
             if rel_path in self.book_index:
                 self.remove_book_by_path(rel_path, skip_save=True)
             
             # Add to vector store with batch optimization
+            embed_start = time.perf_counter()
             logger.info(f"Adding {len(chunks)} chunks to vector store...")
             self.update_progress("embedding", total_pages=total_sections, chunks_generated=len(chunks), current_file=rel_path)
-            
+
             # Add in batches for better performance
             batch_size = 100
             for i in range(0, len(chunks), batch_size):
+                batch_start = time.perf_counter()
                 batch = chunks[i:i + batch_size]
                 self.vectorstore.add_documents(batch)
+                batch_time = time.perf_counter() - batch_start
+
                 if i + batch_size < len(chunks):
-                    self.update_progress("embedding", total_pages=total_sections, 
-                                       chunks_generated=len(chunks), 
+                    batch_num = i//batch_size + 1
+                    total_batches = (len(chunks) + batch_size - 1)//batch_size
+                    logger.info(f"Batch {batch_num}/{total_batches}: {len(batch)} chunks embedded in {batch_time:.2f}s")
+                    self.update_progress("embedding", total_pages=total_sections,
+                                       chunks_generated=len(chunks),
                                        current_file=rel_path,
-                                       current_page=f"Batch {i//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size}")
-            
-            self.vectorstore.persist()
+                                       current_page=f"Batch {batch_num}/{total_batches}")
+
+            embed_time = time.perf_counter() - embed_start
+            logger.info(f"Embedded {len(chunks)} chunks in {embed_time:.2f}s ({len(chunks)/embed_time:.1f} chunks/sec)")
+
+            # Note: Removed self.vectorstore.persist() as ChromaDB 0.4.x+ auto-persists
             self.update_progress("completed", total_pages=total_sections, chunks_generated=len(chunks), current_file=rel_path)
             
             # Update index (thread-safe)

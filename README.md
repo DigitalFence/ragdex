@@ -154,6 +154,27 @@ pip install ragdex
 
 **Don't have uv?** Install it: `curl -LsSf https://astral.sh/uv/install.sh | sh` (then close/reopen Terminal)
 
+#### 📄 Optional: Legacy .doc File Support
+
+Modern `.docx` files work out of the box. For legacy `.doc` files (pre-2007 Word format):
+
+```bash
+# Install optional dependencies
+uv pip install --python ~/ragdex_env/bin/python 'ragdex[doc-support]'
+
+# Also install LibreOffice (system dependency)
+# macOS:
+brew install --cask libreoffice
+
+# Ubuntu/Debian:
+sudo apt-get install libreoffice
+
+# Fedora:
+sudo dnf install libreoffice
+```
+
+**Note**: If you encounter `.doc` files without this optional setup, ragdex will provide a helpful error message with installation instructions.
+
 ### Setup Services (2-3 minutes)
 
 ```bash

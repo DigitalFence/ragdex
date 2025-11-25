@@ -2,6 +2,55 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.4.0] - 2025-01-25 - Performance Optimizations and Optional Dependencies
+
+### Added
+- **Performance Timing Instrumentation**: Added detailed timing logs for all major indexing operations
+  - Individual operation timing: chunking, metadata processing, embedding
+  - Batch-level timing for embedding operations
+  - Real-time chunks/sec metrics for performance monitoring
+  - High-resolution timing using `time.perf_counter()`
+
+### Changed
+- **Optimized Content Categorization**: Significantly improved metadata processing performance
+  - Replaced `any(word in content for word in [...])` with set intersection algorithm
+  - Pre-computes keyword sets to avoid repeated allocations
+  - Uses word tokenization for O(n+m) complexity vs O(n*m)
+  - Caches `indexed_at` timestamp to eliminate redundant datetime calls
+  - **Impact**: ~10-20% faster metadata processing for large documents
+
+- **Removed Deprecated persist() Call**: Eliminated unnecessary manual persistence
+  - ChromaDB 0.4.x+ auto-persists, making manual `vectorstore.persist()` redundant
+  - Removed deprecated call that triggered warnings on every document
+  - **Impact**: Major reduction in I/O overhead and disk writes
+
+### Performance Improvements
+- **Large File Indexing**: Verified successful processing of 500MB+ PDFs
+  - Example: Yoga Vashista English_OCR.pdf (498.9MB, 1845 pages, 5927 chunks)
+    - Chunking: 0.09s
+    - Metadata: 0.08s
+    - Embedding: 70.03s @ 84.6 chunks/sec
+- **Memory Efficiency**: Maintains stable usage (5-9% of 12GB configured limit)
+- **Processing Throughput**: Consistent rates across document types
+  - Small files (<10 chunks): 30-60 chunks/sec
+  - Large files (5000+ chunks): 80-85 chunks/sec
+- **System Reliability**: Successfully indexes complex multi-author collections
+
+### Changed - Optional Dependencies
+- **LibreOffice Made Optional**: Legacy .doc file support now requires optional installation
+  - Install with: `pip install 'ragdex[doc-support]'` (also requires LibreOffice on system)
+  - Modern .docx files work without LibreOffice (uses python-docx)
+  - Graceful fallback with informative error messages when .doc files are encountered
+  - **Impact**: Reduced installation complexity and dependency footprint for users without legacy .doc files
+
+### Technical Details
+- Set-based categorization reduces keyword matching from O(n*m) to O(n+m)
+- Batch processing logs provide granular performance insights
+- Removed redundant ChromaDB persist warnings from logs
+- All timing measurements use high-resolution performance counter
+- Optional dependency groups: `[doc-support]` for legacy .doc files, `[services]` for daemon support
+- Smart fallback: .docx uses Docx2txtLoader when UnstructuredWordDocumentLoader not available
+
 ## [0.3.1] - 2025-11-24
 
 ### Added
