@@ -2,7 +2,7 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
-## [0.3.6] - 2025-01-25 - Bug Fixes and Subfolder Search
+## [0.3.6] - 2025-01-25 - Bug Fixes, Subfolder Search, and Pagination
 
 ### Fixed
 - **book_pages Tool**: Fixed ChromaDB API error caused by invalid 'ids' parameter in include list
@@ -28,6 +28,13 @@ All notable changes to the Spiritual Library MCP Server will be documented in th
   - Post-processing implementation for ChromaDB compatibility
   - **Usage**: `search(query="...", folder="DigitalFence")`
   - **Note**: Requires re-indexing existing documents to use this feature
+
+- **Pagination Support for list_books**: New `offset` parameter for paginating large result sets
+  - Navigate through results in pages (e.g., offset=0 for page 1, offset=50 for page 2)
+  - Limit capped at 200 books per page for performance
+  - Intelligent pagination hints show next page command
+  - **Usage**: `list_books(pattern="...", limit=100, offset=0)`
+  - **Impact**: Can now browse through libraries with 100+ books efficiently
 
 ### Enhanced
 - **Document Metadata**: Added new metadata fields during indexing
