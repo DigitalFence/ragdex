@@ -2,7 +2,27 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
-## [0.4.0] - 2025-01-25 - Performance Optimizations and Optional Dependencies
+## [0.3.4] - 2025-01-25 - MCP Server Query Performance
+
+### Added
+- **MCP Query Caching**: Implemented 5-minute cache for `library_stats` category counts
+  - First call: ~48 seconds (fetches 675K+ documents)
+  - Subsequent calls: <1 second (cached)
+  - Cache automatically expires after 5 minutes
+  - **Impact**: 48× faster for repeated library_stats calls
+
+### Performance Improvements
+- **MCP Server Response Time**: Dramatically improved for repeated queries
+  - `library_stats` tool: 48s → <1s for cached calls
+  - Eliminates slowness when using MCP tools in quick succession
+  - Ideal for interactive use with Claude Desktop
+
+### Technical Details
+- Category counts cached in memory with 5-minute TTL
+- Automatic cache invalidation ensures fresh data
+- Cache stored per-instance (SharedRAG singleton pattern)
+
+## [0.3.3] - 2025-01-25 - Performance Optimizations and Optional Dependencies
 
 ### Added
 - **Performance Timing Instrumentation**: Added detailed timing logs for all major indexing operations

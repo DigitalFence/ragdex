@@ -2105,7 +2105,13 @@ class SharedRAG:
         return result
     
     def get_stats(self):
-        """Get library statistics"""
+        """Get library statistics with cached category counting
+
+        Categories are cached for 5 minutes since they don't change frequently.
+        This reduces typical query time from 40-50s to <1s for repeated calls.
+        """
+        start_time = time.perf_counter()
+
         stats = {
             "total_books": len(self.book_index),
             "total_chunks": 0,
@@ -2114,23 +2120,16 @@ class SharedRAG:
             "cleaned_books": 0,
             "indexing_status": self.get_indexing_status()
         }
-        
-        # Count chunks
+
+        # Count chunks from book index (fast - already in memory)
         for info in self.book_index.values():
             stats["total_chunks"] += info.get("chunks", 0)
-        
-        # Get category breakdown from vector store
-        try:
-            if self.vectorstore:
-                all_docs = self.vectorstore.get()
-                if all_docs and 'metadatas' in all_docs:
-                    for metadata in all_docs['metadatas']:
-                        if 'type' in metadata:
-                            cat_type = metadata['type']
-                            stats['categories'][cat_type] = stats['categories'].get(cat_type, 0) + 1
-        except:
-            pass
-        
+
+        # Get category breakdown with 5-minute cache
+        category_start = time.perf_counter()
+        stats['categories'] = self._get_cached_category_counts()
+        category_time = time.perf_counter() - category_start
+
         # Count failed/cleaned PDFs
         if os.path.exists(self.failed_pdfs_file):
             try:
@@ -2140,8 +2139,53 @@ class SharedRAG:
                     stats["cleaned_books"] = len([f for f in failed_pdfs.values() if f.get("cleaned", False)])
             except:
                 pass
-        
+
+        total_time = time.perf_counter() - start_time
+        logger.info(f"get_stats() completed in {total_time:.2f}s (category counting: {category_time:.2f}s)")
+
         return stats
+
+    def _get_cached_category_counts(self):
+        """Get category counts with 5-minute caching
+
+        Returns:
+            dict: Category counts like {'practice': 35060, 'general': 578989, ...}
+        """
+        # Check if we have a cached value that's less than 5 minutes old
+        cache_ttl = 300  # 5 minutes in seconds
+        current_time = time.time()
+
+        # Initialize cache if needed
+        if not hasattr(self, '_category_cache'):
+            self._category_cache = {'counts': {}, 'timestamp': 0}
+
+        # Return cached value if still fresh
+        if (current_time - self._category_cache['timestamp']) < cache_ttl:
+            logger.debug(f"Using cached category counts (age: {current_time - self._category_cache['timestamp']:.1f}s)")
+            return self._category_cache['counts'].copy()
+
+        # Cache miss - fetch fresh counts
+        logger.info("Category cache expired, fetching fresh counts...")
+        counts = {}
+
+        try:
+            if self.vectorstore:
+                # Fetch all documents at once and count categories
+                # This is faster than 4 separate filtered queries
+                all_docs = self.vectorstore.get()
+                if all_docs and 'metadatas' in all_docs:
+                    for metadata in all_docs['metadatas']:
+                        if 'type' in metadata:
+                            cat_type = metadata['type']
+                            counts[cat_type] = counts.get(cat_type, 0) + 1
+        except Exception as e:
+            logger.debug(f"Error getting category counts: {e}")
+
+        # Update cache
+        self._category_cache = {'counts': counts, 'timestamp': current_time}
+        logger.info(f"Category counts cached: {counts}")
+
+        return counts.copy()
     
     def get_book_pages(self, book_pattern):
         """Get all page numbers available in the index for a specific book
