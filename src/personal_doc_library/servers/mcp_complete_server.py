@@ -328,6 +328,10 @@ class CompleteMCPServer:
                                 "book": {
                                     "type": "string",
                                     "description": "Optional: Search within a specific book (partial title match, case-insensitive)"
+                                },
+                                "folder": {
+                                    "type": "string",
+                                    "description": "Optional: Restrict search to a specific folder (e.g., 'DigitalFence' or 'DigitalFence/OU students resumes')"
                                 }
                             },
                             "required": ["query"]
@@ -807,32 +811,33 @@ Show:
                 filter_type = arguments.get("filter_type")
                 synthesize = arguments.get("synthesize", False)
                 book = arguments.get("book")
-                
+                folder = arguments.get("folder")
+
                 # If a book is specified, filter results to that book
                 if book:
                     # Find matching book
                     book_lower = book.lower()
                     matching_books = []
-                    
+
                     for book_path in self.rag.book_index.keys():
                         if book_lower in book_path.lower():
                             matching_books.append(os.path.basename(book_path))
-                    
+
                     if not matching_books:
                         return {
                             "result": {
                                 "content": [{"type": "text", "text": f"No books found matching '{book}'"}]
                             }
                         }
-                    
+
                     # If multiple matches, use the first one
                     book_name = matching_books[0]
-                    
-                    # Search with book filter
-                    all_results = self.rag.search(query, limit * 3, filter_type, synthesize)
+
+                    # Search with book filter and optional folder filter
+                    all_results = self.rag.search(query, limit * 3, filter_type, synthesize, folder)
                     results = [r for r in all_results if r.get('source', '').startswith(book_name)][:limit]
                 else:
-                    results = self.rag.search(query, limit, filter_type, synthesize)
+                    results = self.rag.search(query, limit, filter_type, synthesize, folder)
                 
                 # Enhanced formatting for article writing
                 text = f"Found {len(results)} relevant passages for query: '{query}'\n\n"

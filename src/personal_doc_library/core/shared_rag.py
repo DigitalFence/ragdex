@@ -1408,6 +1408,9 @@ class SharedRAG:
             indexed_at = datetime.now().isoformat()
             book_name = os.path.basename(filepath)
 
+            # Extract folder path from rel_path (everything except the filename)
+            folder_path = os.path.dirname(rel_path) if rel_path else ""
+
             # Pre-compile categorization keywords for faster lookup
             practice_keywords = {'meditation', 'mindfulness', 'breath', 'breathing'}
             energy_keywords = {'energy', 'chakra', 'healing', 'aura'}
@@ -1415,6 +1418,8 @@ class SharedRAG:
 
             for chunk in chunks:
                 chunk.metadata['book'] = book_name
+                chunk.metadata['folder'] = folder_path
+                chunk.metadata['rel_path'] = rel_path
                 chunk.metadata['document_type'] = doc_type
                 chunk.metadata['indexed_at'] = indexed_at
 
@@ -1768,14 +1773,25 @@ class SharedRAG:
         except Exception as e:
             logger.error(f"Error removing {rel_path}: {str(e)}")
     
-    def search(self, query, k=10, filter_type=None, synthesize=False):
-        """Search the vector store with caching"""
+    def search(self, query, k=10, filter_type=None, synthesize=False, folder=None):
+        """Search the vector store with caching
+
+        Args:
+            query: Search query string
+            k: Number of results to return
+            filter_type: Filter by content type (practice, energy_work, etc.)
+            synthesize: Whether to synthesize results (deprecated, kept for compatibility)
+            folder: Optional folder path to restrict search (e.g., "DigitalFence" or "DigitalFence/OU students resumes")
+
+        Returns:
+            List of formatted search results
+        """
         if not self.vectorstore:
             return []
-        
-        # Create cache key
-        cache_key = f"{query}:{k}:{filter_type}"
-        
+
+        # Create cache key including folder
+        cache_key = f"{query}:{k}:{filter_type}:{folder}"
+
         # Check cache
         if cache_key in self._search_cache:
             cached_result, timestamp = self._search_cache[cache_key]
@@ -1787,18 +1803,37 @@ class SharedRAG:
             else:
                 # Remove expired entry
                 del self._search_cache[cache_key]
-        
+
         try:
-            search_kwargs = {"k": min(k, self.vectorstore._collection.count() or 1)}
+            # Get more results if folder filtering is needed (will filter post-search)
+            k_search = k * 3 if folder else k
+            search_kwargs = {"k": min(k_search, self.vectorstore._collection.count() or 1)}
+
+            # Build filter conditions (only for type, not folder since ChromaDB doesn't support $contains)
             if filter_type:
                 search_kwargs["filter"] = {"type": filter_type}
-            
+
             results = self.vectorstore.similarity_search_with_score(
                 query, **search_kwargs
             )
+
+            # Post-process folder filtering if needed
+            if folder:
+                folder_normalized = folder.strip('/').strip('\\').lower()
+                filtered_results = []
+                for doc, score in results:
+                    doc_folder = doc.metadata.get('folder', '').lower()
+                    if folder_normalized in doc_folder:
+                        filtered_results.append((doc, score))
+                results = filtered_results[:k]  # Limit to k results after filtering
             
             formatted_results = []
             for doc, score in results:
+                # Skip documents with None or empty page_content
+                if doc.page_content is None or not doc.page_content.strip():
+                    logger.warning(f"Skipping document with None/empty content from {doc.metadata.get('book', 'Unknown')}")
+                    continue
+
                 formatted_results.append({
                     "content": doc.page_content,
                     "source": doc.metadata.get('book', 'Unknown'),
@@ -1980,12 +2015,20 @@ class SharedRAG:
             page_list = [pages]
         elif isinstance(pages, list):
             page_list = pages
-        elif isinstance(pages, str) and '-' in pages:
-            try:
-                start, end = map(int, pages.split('-'))
-                page_list = list(range(start, end + 1))
-            except:
-                return {"error": f"Invalid page range format: '{pages}'. Use format like '10-15'"}
+        elif isinstance(pages, str):
+            if '-' in pages:
+                # Range like "10-15"
+                try:
+                    start, end = map(int, pages.split('-'))
+                    page_list = list(range(start, end + 1))
+                except:
+                    return {"error": f"Invalid page range format: '{pages}'. Use format like '10-15'"}
+            else:
+                # Single page number as string like "0" or "5"
+                try:
+                    page_list = [int(pages)]
+                except:
+                    return {"error": f"Invalid page number: '{pages}'. Must be an integer."}
         else:
             return {"error": f"Invalid pages format: {pages}"}
 
@@ -1994,7 +2037,7 @@ class SharedRAG:
 
         if self.vectorstore:
             if is_pdf:
-                # PDFs: Extract by page number
+                # PDFs: Try extracting by page number first
                 for page_num in page_list:
                     try:
                         # Get all chunks from this page using ChromaDB's filter syntax
@@ -2032,9 +2075,11 @@ class SharedRAG:
                                     "chunks": len(page_chunks)
                                 }
                             else:
+                                # Mark as not found, will check for fallback later
                                 extracted_pages[page_num] = {
-                                    "content": f"Page {page_num} not found in index",
-                                    "chunks": 0
+                                    "content": None,
+                                    "chunks": 0,
+                                    "not_found": True
                                 }
 
                     except Exception as e:
@@ -2043,6 +2088,14 @@ class SharedRAG:
                             "content": f"Error extracting page: {str(e)}",
                             "chunks": 0
                         }
+
+                # Check if ALL pages were not found - if so, fall back to chunk extraction
+                all_not_found = all(p.get('not_found', False) for p in extracted_pages.values())
+                if all_not_found:
+                    logger.info(f"No page numbers found for {book_name}, falling back to chunk extraction")
+                    # Clear extracted_pages and fall through to non-PDF logic
+                    extracted_pages = {}
+                    is_pdf = False  # Treat as non-PDF for chunk extraction
             else:
                 # Non-PDFs (Word, EPUB, etc.): Extract by chunk index
                 try:
@@ -2230,7 +2283,7 @@ class SharedRAG:
             # Query for all documents from this book
             results = self.vectorstore._collection.get(
                 where={"book": {"$eq": book_name}},
-                include=["metadatas", "ids"]
+                include=["metadatas"]
             )
 
             # Extract unique page numbers
@@ -2243,7 +2296,7 @@ class SharedRAG:
                 "book": book_name,
                 "book_path": book_path,
                 "total_pages": len(page_numbers),
-                "total_chunks": len(results.get('ids', [])),
+                "total_chunks": len(results.get('metadatas', [])),
                 "page_numbers": sorted(list(page_numbers))
             }
 
