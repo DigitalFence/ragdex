@@ -15,6 +15,8 @@ All services share access to:
 - **External Document Library** - your documents (read-only mount)
 - **External Logs** - stored in `./data/logs`
 
+**Docker Image:** Uses Python 3.11 with full document processing support (PDF, Office, E-books) and optional legacy .doc file handling.
+
 ## Prerequisites
 
 - Docker Engine 20.10+
@@ -444,6 +446,23 @@ docker-compose up -d
 docker-compose exec ragdex-mcp pip show personal-doc-library
 ```
 
+### Migrating Metadata (v0.3.6+)
+
+If upgrading to v0.3.6+ from an earlier version, you may need to migrate metadata:
+
+```bash
+# Stop services to ensure clean migration
+docker-compose down
+
+# Run migration script inside container
+docker-compose run --rm ragdex-mcp python scripts/migrate_metadata_v036.py --backup
+
+# Restart services
+docker-compose up -d
+```
+
+The migration adds folder and relative path metadata to existing documents without requiring full re-indexing.
+
 ## Uninstalling
 
 ```bash
@@ -462,8 +481,8 @@ docker volume prune
 
 ## Getting Help
 
-- **Issues:** https://github.com/anthropics/ragdex/issues
-- **Documentation:** https://docs.claude.com/
+- **Issues:** https://github.com/hpoliset/ragdex/issues
+- **Documentation:** https://github.com/hpoliset/ragdex#readme
 - **Logs:** Check `data/logs/` for detailed error messages
 
 ## License

@@ -39,8 +39,8 @@ WORKDIR /app
 # Copy application files
 COPY --chown=ragdex:ragdex . /app/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -e .
+# Install Python dependencies including optional doc-support (since LibreOffice is installed)
+RUN pip install --no-cache-dir -e ".[doc-support]"
 
 # Create directories for external mounts
 RUN mkdir -p /data/chroma_db /data/documents /data/logs && \
