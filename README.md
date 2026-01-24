@@ -74,7 +74,8 @@
 
 | Tool | Description |
 |------|-------------|
-| 🔍 **search** | Semantic search with optional filters |
+| 🔍 **search** | Semantic search with enhanced filters (author, source_type, date_range, volume) |
+| 📅 **get_whisper_by_date** | Retrieve Whispers messages from specific dates |
 | 📊 **compare_perspectives** | Compare viewpoints across documents |
 | 📈 **library_stats** | Get comprehensive statistics |
 | 📖 **summarize_book** | Generate AI summaries |
@@ -84,6 +85,40 @@
 | 📅 **recent_books** | Find recently indexed content |
 | 🔄 **refresh_cache** | Update search cache |
 | ...and 8 more! | |
+
+### 🔮 Enhanced Whispers Support
+
+Ragdex includes specialized metadata extraction and filtering for spiritual texts, particularly **Whispers from the Brighter World** volumes:
+
+<table>
+<tr>
+<td width="50%">
+
+#### 📊 Rich Metadata Extraction
+- **Author identification** (Babuji, Lalaji, Chariji)
+- **Date/time parsing** from message headers
+- **Volume detection** (Volumes 1-6)
+- **Source type classification** (whispers, heartfulness, osho, etc.)
+
+</td>
+<td width="50%">
+
+#### 🔍 Precision Filtering
+- **Search by author**: `author="Babuji"`
+- **Filter by date range**: `date_from="2002-01-01", date_to="2002-12-31"`
+- **Filter by volume**: `volume=1`
+- **Retrieve by date**: `get_whisper_by_date("2002-06-28")`
+
+</td>
+</tr>
+</table>
+
+**Example queries in Claude:**
+```
+"Search for messages from Babuji about perseverance in 2002"
+"Find all Whispers messages from June 28, 2002"
+"Show me Volume 1 messages about meditation"
+```
 
 ### 🎯 Smart Email Filtering
 
@@ -314,6 +349,67 @@ If you already have other MCP servers, add ragdex to the existing structure:
 ```
 
 </details>
+
+### 🔄 Selective Re-indexing
+
+Need to re-index specific documents with updated metadata extraction? Use the flexible re-indexing tool:
+
+```bash
+# Re-index all Whispers documents with enhanced metadata
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --books-path "/Users/yourname/Documents" \
+  --pattern "whispers" \
+  --yes
+
+# Re-index by file extension
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --extension ".docx" \
+  --yes
+
+# Re-index from specific directory
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --directory "Babuji's Books/Whispers" \
+  --yes
+
+# Re-index specific files
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --files "path/to/file1.pdf" "path/to/file2.docx" \
+  --yes
+
+# Re-index all documents (use with caution!)
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --all \
+  --yes
+
+# Dry run to preview what would be re-indexed
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --pattern "whispers" \
+  --dry-run
+
+# Combine multiple filters
+arch -arm64 ~/ragdex_env/bin/python scripts/reindex_documents.py \
+  --pattern "whispers" \
+  --extension ".pdf" \
+  --yes
+```
+
+**Options:**
+- `--all`: Re-index all documents in the library
+- `--pattern TEXT`: Match documents containing text (case-insensitive)
+- `--extension EXT`: Match documents with specific extension (.pdf, .docx, etc.)
+- `--directory DIR`: Match documents in specific directory
+- `--files FILE [FILE ...]`: Re-index specific files by path
+- `--books-path PATH`: Override books directory location
+- `--yes`, `-y`: Auto-confirm without prompting
+- `--dry-run`: Preview what would be re-indexed without making changes
+
+**Use cases:**
+- **After code updates**: Re-index to populate new metadata fields
+- **Fix corrupted indexes**: Re-process documents that failed
+- **Update specific content**: Re-index after document edits
+- **Migrate to new format**: Re-index with updated extraction logic
+
+**Note**: On Apple Silicon Macs, use `arch -arm64` to avoid Rosetta compatibility issues.
 
 ### Advanced Installation
 
@@ -560,6 +656,7 @@ ragdex ensure-dirs
 
 Once configured, you can ask Claude:
 
+**General queries:**
 ```
 "Search my library for information about machine learning"
 "Compare perspectives on climate change across my documents"
@@ -568,23 +665,65 @@ Once configured, you can ask Claude:
 "What meetings did I have last month?" (from emails)
 ```
 
+**Enhanced Whispers queries (with metadata filtering):**
+```
+"Search for messages from Babuji about perseverance"
+"Find Whispers messages from June 2002 about meditation"
+"Show me all messages from Volume 1 about surrender"
+"Get the Whispers message from June 28, 2002"
+"Find messages from Lalaji in Volume 3"
+"Search for heartfulness messages about lassitude between 2002 and 2003"
+```
+
+**Advanced search with filters:**
+```
+"Search for practice-related content from Babuji in 2002"
+"Find all Osho quotes about meditation"
+"Show me yoga sutras commentary from my library"
+```
+
 ### Python API Usage (Advanced)
 
 While Ragdex is primarily designed for Claude Desktop via MCP, you can also use it programmatically:
 
 ```python
-from personal_doc_library.core.shared_rag import RAGSystem
+from personal_doc_library.core.shared_rag import SharedRAG
 
 # Initialize the system
-rag = RAGSystem()
+rag = SharedRAG()
 
-# Search documents
-results = rag.search_documents("artificial intelligence", max_results=5)
+# Basic search
+results = rag.search("artificial intelligence", k=5)
+
+# Enhanced search with filters
+results = rag.search(
+    query="perseverance meditation",
+    k=10,
+    author="Babuji",
+    source_type="whispers",
+    date_from="2002-01-01",
+    date_to="2002-12-31",
+    volume=1
+)
 
 # Get document stats
 stats = rag.get_library_statistics()
 print(f"Documents indexed: {len(rag.book_index)}")
+
+# Re-index specific documents
+rag.process_document("/path/to/document.pdf", "relative/path.pdf")
 ```
+
+**Search parameters:**
+- `query` (str): Search query text
+- `k` (int): Number of results to return (default: 10)
+- `filter_type` (str): Content type filter (practice, energy_work, philosophy, general)
+- `folder` (str): Restrict to specific folder
+- `author` (str): Filter by author (e.g., "Babuji", "Lalaji")
+- `source_type` (str): Filter by source (whispers, heartfulness, osho, yoga_sutras, general)
+- `date_from` (str): Date range start (ISO format: "2002-01-01")
+- `date_to` (str): Date range end (ISO format: "2002-12-31")
+- `volume` (int): Filter by Whispers volume (1-6)
 
 **Note**: The primary use case is through Claude Desktop. Direct API usage requires understanding the internal architecture.
 

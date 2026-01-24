@@ -45,8 +45,8 @@ jobs:
 
     - name: Test CLI commands
       run: |
-        uv run pdlib-cli --help
-        uv run pdlib-cli config
+        uv run ragdex --help
+        uv run ragdex config
 
     - name: Run test files
       run: |
