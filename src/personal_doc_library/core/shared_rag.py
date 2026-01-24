@@ -1842,32 +1842,32 @@ class SharedRAG:
             search_kwargs = {"k": min(k_search, self.vectorstore._collection.count() or 1)}
 
             # Build filter conditions for ChromaDB
-            filters = {}
+            # Use $and operator for multiple conditions (ChromaDB 1.3+ requirement)
+            filter_conditions = []
 
             if filter_type:
-                filters["type"] = filter_type
+                filter_conditions.append({"type": {"$eq": filter_type}})
 
             if author:
-                filters["author"] = author
+                filter_conditions.append({"author": {"$eq": author}})
 
             if source_type:
-                filters["source_type"] = source_type
+                filter_conditions.append({"source_type": {"$eq": source_type}})
 
             if volume:
-                filters["volume"] = volume
+                filter_conditions.append({"volume": {"$eq": volume}})
 
-            # Date range filtering (ChromaDB supports $gte and $lte)
-            if date_from or date_to:
-                date_filter = {}
-                if date_from:
-                    date_filter["$gte"] = date_from
-                if date_to:
-                    date_filter["$lte"] = date_to
-                if date_filter:
-                    filters["date"] = date_filter
+            # Date range filtering - must use separate conditions for $gte and $lte
+            if date_from:
+                filter_conditions.append({"date": {"$gte": date_from}})
+            if date_to:
+                filter_conditions.append({"date": {"$lte": date_to}})
 
-            if filters:
-                search_kwargs["filter"] = filters
+            # Construct where clause based on number of conditions
+            if len(filter_conditions) > 1:
+                search_kwargs["filter"] = {"$and": filter_conditions}
+            elif len(filter_conditions) == 1:
+                search_kwargs["filter"] = filter_conditions[0]
 
             results = self.vectorstore.similarity_search_with_score(
                 query, **search_kwargs

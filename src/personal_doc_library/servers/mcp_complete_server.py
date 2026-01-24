@@ -1575,18 +1575,33 @@ Failed: {details.get('failed', 0)}"""
 
                 # Search for messages from this date
                 try:
-                    search_kwargs = {"k": 100}  # Get many results to find all messages from date
-                    filters = {
-                        "source_type": "whispers",
-                        "date": date_iso
-                    }
+                    # Build filter conditions using ChromaDB's required syntax
+                    filter_conditions = [
+                        {"source_type": {"$eq": "whispers"}},
+                        {"date": {"$eq": date_iso}}
+                    ]
+
                     if volume:
-                        filters["volume"] = volume
+                        filter_conditions.append({"volume": {"$eq": volume}})
 
-                    search_kwargs["filter"] = filters
+                    # Use ChromaDB's get() method for metadata-only queries
+                    # Multiple conditions require $and operator
+                    where_clause = {"$and": filter_conditions}
 
-                    # Get all chunks from this date
-                    results = self.rag.vectorstore.similarity_search_with_score("*", **search_kwargs)
+                    chroma_results = self.rag.vectorstore._collection.get(
+                        where=where_clause,
+                        include=["documents", "metadatas"]
+                    )
+
+                    # Convert ChromaDB results to document format
+                    if not chroma_results or not chroma_results['documents']:
+                        results = []
+                    else:
+                        from langchain.schema import Document
+                        results = []
+                        for doc_text, metadata in zip(chroma_results['documents'], chroma_results['metadatas']):
+                            doc = Document(page_content=doc_text, metadata=metadata)
+                            results.append((doc, 0.0))  # Score not relevant for metadata queries
 
                     if not results:
                         text = f"No Whispers messages found for date: {date_iso}"
