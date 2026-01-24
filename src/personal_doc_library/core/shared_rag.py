@@ -1413,7 +1413,8 @@ class SharedRAG:
             folder_path = os.path.dirname(rel_path) if rel_path else ""
 
             # Detect source type and volume (for Whispers documents)
-            source_type = WhispersParser.detect_source_type(book_name)
+            # Use rel_path to catch files in Whispers directories even if filename doesn't contain "whispers"
+            source_type = WhispersParser.detect_source_type(rel_path)
             volume = WhispersParser.extract_volume(book_name) if source_type == 'whispers' else None
 
             # Pre-compile categorization keywords for faster lookup

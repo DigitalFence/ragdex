@@ -115,7 +115,8 @@ class WhispersParser:
         """Detect source type from filename"""
         filename_lower = filename.lower()
 
-        if 'whispers' in filename_lower and 'volume' in filename_lower:
+        # Check for Whispers documents (handle variations: "whispers", "whisper")
+        if 'whisper' in filename_lower:
             return 'whispers'
         elif any(x in filename_lower for x in ['hfn', 'cnbs', 'collector', 'heartfulness']):
             return 'heartfulness'
@@ -128,8 +129,22 @@ class WhispersParser:
 
     @classmethod
     def extract_volume(cls, filename: str) -> Optional[int]:
-        """Extract volume number from Whispers filename"""
-        match = re.search(r'volume[_\s-]*(\d+)', filename, re.IGNORECASE)
-        if match:
-            return int(match.group(1))
+        """Extract volume number from Whispers filename
+
+        Handles variations:
+        - "Volume 1", "Volume-1", "Volume_1"
+        - "Vol 1", "Vol-1", "Vol_1", "Vol1"
+        - "V1", "V-1"
+        """
+        # Try multiple patterns in order of specificity
+        patterns = [
+            r'vol(?:ume)?[_\s-]*(\d+)',  # volume, vol with separator or space
+            r'v[_\s-]?(\d+)',             # v1, v-1, v 1
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, filename, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+
         return None
