@@ -302,7 +302,7 @@ class CompleteMCPServer:
                     "tools": [
                     {
                         "name": "search",
-                        "description": "Search the personal library with optional synthesis",
+                        "description": "Search the personal library with optional synthesis and advanced filtering",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -332,6 +332,27 @@ class CompleteMCPServer:
                                 "folder": {
                                     "type": "string",
                                     "description": "Optional: Restrict search to a specific folder (e.g., 'DigitalFence' or 'DigitalFence/OU students resumes')"
+                                },
+                                "author": {
+                                    "type": "string",
+                                    "description": "Filter by author name (e.g., 'Babuji', 'Lalaji', 'Chariji')"
+                                },
+                                "source_type": {
+                                    "type": "string",
+                                    "description": "Filter by source type",
+                                    "enum": ["whispers", "heartfulness", "osho", "yoga_sutras", "general"]
+                                },
+                                "date_from": {
+                                    "type": "string",
+                                    "description": "Filter by date range start (ISO format: '2002-01-01')"
+                                },
+                                "date_to": {
+                                    "type": "string",
+                                    "description": "Filter by date range end (ISO format: '2002-12-31')"
+                                },
+                                "volume": {
+                                    "type": "integer",
+                                    "description": "Filter by Whispers volume number (1-6)"
                                 }
                             },
                             "required": ["query"]
@@ -566,6 +587,24 @@ class CompleteMCPServer:
                                 }
                             },
                             "required": ["book"]
+                        }
+                    },
+                    {
+                        "name": "get_whisper_by_date",
+                        "description": "Retrieve Whispers message(s) from a specific date",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string",
+                                    "description": "Date in ISO format (e.g., '2002-06-28') or natural format (e.g., 'June 28, 2002')"
+                                },
+                                "volume": {
+                                    "type": "integer",
+                                    "description": "Optional: Limit to specific volume (1-6)"
+                                }
+                            },
+                            "required": ["date"]
                         }
                     }
                 ]
@@ -817,6 +856,11 @@ Show:
                 synthesize = arguments.get("synthesize", False)
                 book = arguments.get("book")
                 folder = arguments.get("folder")
+                author = arguments.get("author")
+                source_type = arguments.get("source_type")
+                date_from = arguments.get("date_from")
+                date_to = arguments.get("date_to")
+                volume = arguments.get("volume")
 
                 # If a book is specified, filter results to that book
                 if book:
@@ -839,21 +883,37 @@ Show:
                     book_name = matching_books[0]
 
                     # Search with book filter and optional folder filter
-                    all_results = self.rag.search(query, limit * 3, filter_type, synthesize, folder)
+                    all_results = self.rag.search(query, limit * 3, filter_type, synthesize, folder,
+                                                 author, source_type, date_from, date_to, volume)
                     results = [r for r in all_results if r.get('source', '').startswith(book_name)][:limit]
                 else:
-                    results = self.rag.search(query, limit, filter_type, synthesize, folder)
+                    results = self.rag.search(query, limit, filter_type, synthesize, folder,
+                                            author, source_type, date_from, date_to, volume)
                 
                 # Enhanced formatting for article writing
                 text = f"Found {len(results)} relevant passages for query: '{query}'\n\n"
-                
+
                 for i, result in enumerate(results, 1):
                     text += f"━━━ Result {i} ━━━\n"
                     text += f"📖 Source: {result['source']}\n"
+
+                    # Show additional metadata if present
+                    if 'source_type' in result:
+                        text += f"📂 Type: {result['source_type']}\n"
+                    if 'author' in result:
+                        text += f"✍️  Author: {result['author']}\n"
+                    if 'date' in result:
+                        text += f"📅 Date: {result['date']}"
+                        if 'time' in result:
+                            text += f" at {result['time']}"
+                        text += "\n"
+                    if 'volume' in result:
+                        text += f"📚 Volume: {result['volume']}\n"
+
                     text += f"📄 Page: {result['page']}\n"
-                    text += f"🏷️  Type: {result['type']}\n"
+                    text += f"🏷️  Category: {result['type']}\n"
                     text += f"📊 Relevance: {result['relevance_score']:.3f}\n\n"
-                    
+
                     # Provide more content for article writing
                     content = result['content']
                     if len(content) > self.CONTENT_PREVIEW_MAX:
@@ -1490,7 +1550,93 @@ Failed: {details.get('failed', 0)}"""
                         "content": [{"type": "text", "text": text}]
                     }
                 }
-        
+
+            elif tool_name == "get_whisper_by_date":
+                self.ensure_rag_initialized()
+                date_str = arguments.get("date", "")
+                volume = arguments.get("volume")
+
+                # Parse date to ISO format if needed
+                from datetime import datetime
+                try:
+                    # Try ISO format first
+                    if '-' in date_str:
+                        date_iso = date_str  # Already ISO
+                    else:
+                        # Try parsing natural format
+                        parsed_date = datetime.strptime(date_str, "%B %d, %Y")
+                        date_iso = parsed_date.strftime("%Y-%m-%d")
+                except:
+                    return {
+                        "result": {
+                            "content": [{"type": "text", "text": f"Could not parse date: {date_str}. Use ISO format (2002-06-28) or natural format (June 28, 2002)"}]
+                        }
+                    }
+
+                # Search for messages from this date
+                try:
+                    search_kwargs = {"k": 100}  # Get many results to find all messages from date
+                    filters = {
+                        "source_type": "whispers",
+                        "date": date_iso
+                    }
+                    if volume:
+                        filters["volume"] = volume
+
+                    search_kwargs["filter"] = filters
+
+                    # Get all chunks from this date
+                    results = self.rag.vectorstore.similarity_search_with_score("*", **search_kwargs)
+
+                    if not results:
+                        text = f"No Whispers messages found for date: {date_iso}"
+                        if volume:
+                            text += f" in Volume {volume}"
+                    else:
+                        # Group by time if multiple messages on same date
+                        messages_by_time = {}
+                        for doc, score in results:
+                            time = doc.metadata.get('time', 'Unknown')
+                            if time not in messages_by_time:
+                                messages_by_time[time] = []
+                            messages_by_time[time].append(doc)
+
+                        text = f"📅 Whispers Messages from {date_iso}\n"
+                        text += f"Found {len(messages_by_time)} message(s)\n\n"
+
+                        for time in sorted(messages_by_time.keys()):
+                            docs = messages_by_time[time]
+                            text += f"━━━ Message at {time} ━━━\n"
+
+                            # Show metadata from first chunk
+                            first_doc = docs[0]
+                            if 'author' in first_doc.metadata:
+                                text += f"✍️  Author: {first_doc.metadata['author']}\n"
+                            if 'volume' in first_doc.metadata:
+                                text += f"📚 Volume: {first_doc.metadata['volume']}\n"
+                            if 'page' in first_doc.metadata:
+                                text += f"📄 Page: {first_doc.metadata['page']}\n"
+
+                            text += "\n"
+
+                            # Combine content from all chunks
+                            full_content = "\n\n".join(doc.page_content for doc in docs)
+                            text += full_content + "\n\n"
+
+                    return {
+                        "result": {
+                            "content": [{"type": "text", "text": text}]
+                        }
+                    }
+
+                except Exception as e:
+                    logger.error(f"Error retrieving Whispers by date: {e}")
+                    return {
+                        "result": {
+                            "content": [{"type": "text", "text": f"Error: {str(e)}"}]
+                        }
+                    }
+
         return {
             "error": {
                 "code": -32601,

@@ -43,6 +43,7 @@ from langchain_community.vectorstores import Chroma
 
 # Project imports
 from .config import config
+from ..utils.whispers_parser import WhispersParser
 
 # Optional import for .doc/.docx support
 try:
@@ -1411,6 +1412,10 @@ class SharedRAG:
             # Extract folder path from rel_path (everything except the filename)
             folder_path = os.path.dirname(rel_path) if rel_path else ""
 
+            # Detect source type and volume (for Whispers documents)
+            source_type = WhispersParser.detect_source_type(book_name)
+            volume = WhispersParser.extract_volume(book_name) if source_type == 'whispers' else None
+
             # Pre-compile categorization keywords for faster lookup
             practice_keywords = {'meditation', 'mindfulness', 'breath', 'breathing'}
             energy_keywords = {'energy', 'chakra', 'healing', 'aura'}
@@ -1422,6 +1427,27 @@ class SharedRAG:
                 chunk.metadata['rel_path'] = rel_path
                 chunk.metadata['document_type'] = doc_type
                 chunk.metadata['indexed_at'] = indexed_at
+
+                # Add source_type and volume
+                chunk.metadata['source_type'] = source_type
+                if volume:
+                    chunk.metadata['volume'] = volume
+
+                # Parse Whispers date and author if applicable
+                if source_type == 'whispers':
+                    date_info = WhispersParser.parse_date_header(chunk.page_content)
+                    if date_info:
+                        chunk.metadata['date'] = date_info['date']
+                        chunk.metadata['time'] = date_info['time']
+                        if date_info['day_of_week']:
+                            chunk.metadata['day_of_week'] = date_info['day_of_week']
+                        chunk.metadata['year'] = date_info['year']
+                        chunk.metadata['month'] = date_info['month']
+
+                        # Try to extract author
+                        author = WhispersParser.extract_author(chunk.page_content, date_info)
+                        if author:
+                            chunk.metadata['author'] = author
 
                 # Optimized categorization using set intersection
                 content_lower = chunk.page_content.lower()
@@ -1773,8 +1799,9 @@ class SharedRAG:
         except Exception as e:
             logger.error(f"Error removing {rel_path}: {str(e)}")
     
-    def search(self, query, k=10, filter_type=None, synthesize=False, folder=None):
-        """Search the vector store with caching
+    def search(self, query, k=10, filter_type=None, synthesize=False, folder=None,
+               author=None, source_type=None, date_from=None, date_to=None, volume=None):
+        """Search the vector store with enhanced filtering and caching
 
         Args:
             query: Search query string
@@ -1782,6 +1809,11 @@ class SharedRAG:
             filter_type: Filter by content type (practice, energy_work, etc.)
             synthesize: Whether to synthesize results (deprecated, kept for compatibility)
             folder: Optional folder path to restrict search (e.g., "DigitalFence" or "DigitalFence/OU students resumes")
+            author: Filter by author name (e.g., "Babuji")
+            source_type: Filter by source type (whispers, heartfulness, osho, etc.)
+            date_from: Filter by date range start (ISO format: "2002-01-01")
+            date_to: Filter by date range end (ISO format: "2002-12-31")
+            volume: Filter by Whispers volume number (1-6)
 
         Returns:
             List of formatted search results
@@ -1789,8 +1821,8 @@ class SharedRAG:
         if not self.vectorstore:
             return []
 
-        # Create cache key including folder
-        cache_key = f"{query}:{k}:{filter_type}:{folder}"
+        # Create cache key including all filter parameters
+        cache_key = f"{query}:{k}:{filter_type}:{folder}:{author}:{source_type}:{date_from}:{date_to}:{volume}"
 
         # Check cache
         if cache_key in self._search_cache:
@@ -1809,9 +1841,33 @@ class SharedRAG:
             k_search = k * 3 if folder else k
             search_kwargs = {"k": min(k_search, self.vectorstore._collection.count() or 1)}
 
-            # Build filter conditions (only for type, not folder since ChromaDB doesn't support $contains)
+            # Build filter conditions for ChromaDB
+            filters = {}
+
             if filter_type:
-                search_kwargs["filter"] = {"type": filter_type}
+                filters["type"] = filter_type
+
+            if author:
+                filters["author"] = author
+
+            if source_type:
+                filters["source_type"] = source_type
+
+            if volume:
+                filters["volume"] = volume
+
+            # Date range filtering (ChromaDB supports $gte and $lte)
+            if date_from or date_to:
+                date_filter = {}
+                if date_from:
+                    date_filter["$gte"] = date_from
+                if date_to:
+                    date_filter["$lte"] = date_to
+                if date_filter:
+                    filters["date"] = date_filter
+
+            if filters:
+                search_kwargs["filter"] = filters
 
             results = self.vectorstore.similarity_search_with_score(
                 query, **search_kwargs
@@ -1834,13 +1890,27 @@ class SharedRAG:
                     logger.warning(f"Skipping document with None/empty content from {doc.metadata.get('book', 'Unknown')}")
                     continue
 
-                formatted_results.append({
+                result = {
                     "content": doc.page_content,
                     "source": doc.metadata.get('book', 'Unknown'),
                     "page": doc.metadata.get('page', 'Unknown'),
                     "type": doc.metadata.get('type', 'general'),
                     "relevance_score": float(score)
-                })
+                }
+
+                # Include additional metadata if present
+                if 'author' in doc.metadata:
+                    result['author'] = doc.metadata['author']
+                if 'date' in doc.metadata:
+                    result['date'] = doc.metadata['date']
+                if 'time' in doc.metadata:
+                    result['time'] = doc.metadata['time']
+                if 'source_type' in doc.metadata:
+                    result['source_type'] = doc.metadata['source_type']
+                if 'volume' in doc.metadata:
+                    result['volume'] = doc.metadata['volume']
+
+                formatted_results.append(result)
             
             # Cache the results
             self._search_cache[cache_key] = (formatted_results, time.time())
