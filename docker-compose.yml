@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # MCP Server - for Claude Desktop integration
+  ragdex-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ragdex-mcp
+    command: ragdex-mcp
+    volumes:
+      # External Vector DB
+      - ./data/chroma_db:/data/chroma_db
+      # External Document Library (change this to your documents path)
+      - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
+      # External Logs
+      - ./data/logs:/data/logs
+    environment:
+      - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
+      - PERSONAL_LIBRARY_DOC_PATH=/data/documents
+      - PERSONAL_LIBRARY_LOGS_PATH=/data/logs
+      - CHROMA_TELEMETRY=false
+      - PYTHONUNBUFFERED=1
+      # Email indexing (optional)
+      - PERSONAL_LIBRARY_INDEX_EMAILS=${INDEX_EMAILS:-false}
+      - PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=${EMAIL_MAX_AGE_DAYS:-365}
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  # Background Indexer - monitors and indexes documents
+  ragdex-index:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ragdex-index
+    command: ragdex-index
+    volumes:
+      # External Vector DB
+      - ./data/chroma_db:/data/chroma_db
+      # External Document Library (change this to your documents path)
+      - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
+      # External Logs
+      - ./data/logs:/data/logs
+    environment:
+      - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
+      - PERSONAL_LIBRARY_DOC_PATH=/data/documents
+      - PERSONAL_LIBRARY_LOGS_PATH=/data/logs
+      - CHROMA_TELEMETRY=false
+      - PYTHONUNBUFFERED=1
+      # Email indexing (optional)
+      - PERSONAL_LIBRARY_INDEX_EMAILS=${INDEX_EMAILS:-false}
+      - PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=${EMAIL_MAX_AGE_DAYS:-365}
+    restart: unless-stopped
+    depends_on:
+      - ragdex-mcp
+
+  # Web Dashboard - monitoring interface at http://localhost:8888
+  ragdex-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ragdex-web
+    command: ragdex-web
+    ports:
+      - "8888:8888"
+    volumes:
+      # External Vector DB
+      - ./data/chroma_db:/data/chroma_db
+      # External Document Library (change this to your documents path)
+      - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
+      # External Logs
+      - ./data/logs:/data/logs
+    environment:
+      - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
+      - PERSONAL_LIBRARY_DOC_PATH=/data/documents
+      - PERSONAL_LIBRARY_LOGS_PATH=/data/logs
+      - CHROMA_TELEMETRY=false
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    depends_on:
+      - ragdex-mcp
+
+volumes:
+  # Named volumes (optional - can use bind mounts instead)
+  chroma_db:
+    driver: local
+  logs:
+    driver: local
