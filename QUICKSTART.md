@@ -26,11 +26,12 @@ Use this checklist to verify you're ready to install Ragdex. Don't worry if you 
 
 **Supported:**
 - **macOS**: 10.15 Catalina or newer (including M1/M2/M3 Macs)
-- **Linux**:
+- **Linux** (untested — community feedback welcome):
   - Ubuntu 20.04 LTS or newer
   - Debian 11 or newer
   - Fedora 35 or newer
   - Other distributions with Python 3.10+ support
+  - *Note: Linux support has not been tested. LaunchAgent services are macOS-only; Linux users should use systemd or run services manually.*
 
 **NOT Supported:**
 - Windows (native) - may work with WSL2 but untested
@@ -428,10 +429,10 @@ These tools are **only needed for specific document formats**. Install them only
 # macOS
 brew install --cask calibre
 
-# Linux (Ubuntu/Debian)
+# Linux (Ubuntu/Debian) — untested
 sudo apt install calibre
 
-# Linux (Fedora/RHEL)
+# Linux (Fedora/RHEL) — untested
 sudo dnf install calibre
 ```
 
@@ -461,10 +462,10 @@ ebook-convert (calibre 6.x.x)
 # macOS
 brew install --cask libreoffice
 
-# Linux (Ubuntu/Debian)
+# Linux (Ubuntu/Debian) — untested
 sudo apt install libreoffice
 
-# Linux (Fedora/RHEL)
+# Linux (Fedora/RHEL) — untested
 sudo dnf install libreoffice
 ```
 
@@ -484,9 +485,11 @@ LibreOffice 7.x.x.x
 
 #### ocrmypdf + Tesseract
 
-**When needed**: PDFs that are scanned images (no selectable text)
+**When needed**: PDFs that are scanned images (no selectable text). Ragdex auto-detects scanned PDFs by sampling the first 10 pages — if less than 20% of the content is selectable text, OCR is triggered automatically.
 
-**What happens without it**: Scanned PDFs will have no extractable text
+**What happens without it**: Scanned PDFs will have no extractable text and will be indexed as empty documents
+
+**How it works**: `ocrmypdf` uses Tesseract as the underlying OCR engine. Both must be installed.
 
 **Installation:**
 
@@ -497,7 +500,7 @@ brew install ocrmypdf tesseract
 # For non-English documents, install language packs
 brew install tesseract-lang
 
-# Linux (Ubuntu/Debian)
+# Linux (Ubuntu/Debian) — untested
 sudo apt install ocrmypdf tesseract-ocr
 
 # For other languages
@@ -518,13 +521,15 @@ tesseract 5.x.x
 
 ---
 
-### For Advanced PDF Processing
+### For Corrupted/Malformed PDFs
 
 #### Ghostscript
 
-**When needed**: Corrupted or complex PDFs that fail standard processing
+**When needed**: PDFs that fail standard text extraction due to corruption, malformed structure, or problematic color spaces. Ragdex automatically attempts to clean these using Ghostscript when initial processing fails.
 
-**What happens without it**: Some problematic PDFs may fail to index
+**What happens without it**: Corrupted PDFs will be added to the failed documents list. You can retry them after installing Ghostscript.
+
+**How it works**: The `PDFCleaner` rewrites the PDF using `gs -sDEVICE=pdfwrite` with ebook-quality settings, which often fixes structural issues.
 
 **Installation:**
 
@@ -532,10 +537,10 @@ tesseract 5.x.x
 # macOS
 brew install ghostscript
 
-# Linux (Ubuntu/Debian)
+# Linux (Ubuntu/Debian) — untested
 sudo apt install ghostscript
 
-# Linux (Fedora/RHEL)
+# Linux (Fedora/RHEL) — untested
 sudo dnf install ghostscript
 ```
 
@@ -544,28 +549,23 @@ sudo dnf install ghostscript
 gs --version
 ```
 
+> **Note**: Poppler (`pdftotext`, `pdfinfo`) is **not required** — Ragdex uses `pypdf` and `pdfminer.six` (pure Python) for PDF text extraction.
+
 ---
 
-#### poppler-utils
-
-**When needed**: Advanced PDF conversion and utilities
-
-**Installation:**
+### Install All Optional Tools at Once
 
 ```bash
-# macOS
-brew install poppler
+# macOS — install everything for full format support
+brew install --cask calibre libreoffice
+brew install ocrmypdf tesseract ghostscript
 
-# Linux (Ubuntu/Debian)
-sudo apt install poppler-utils
-
-# Linux (Fedora/RHEL)
-sudo dnf install poppler-utils
-```
-
-**Verify installation:**
-```bash
-pdfinfo --version
+# Verify all tools
+ebook-convert --version   # Calibre
+soffice --version         # LibreOffice
+ocrmypdf --version        # OCR
+tesseract --version       # OCR engine
+gs --version              # Ghostscript
 ```
 
 ---
@@ -632,9 +632,11 @@ echo -e "\n=== Full Disk Access Test (macOS) ==="
 ls ~/Library/Mail >/dev/null 2>&1 && echo "✅ Full Disk Access granted" || echo "❌ Full Disk Access NOT granted"
 
 echo -e "\n=== Optional Tools ==="
-ebook-convert --version 2>/dev/null | head -1 && echo "✅ Calibre" || echo "ℹ️ Calibre not installed (needed for MOBI)"
-soffice --version 2>/dev/null && echo "✅ LibreOffice" || echo "ℹ️ LibreOffice not installed (needed for .doc)"
+ebook-convert --version 2>/dev/null | head -1 && echo "✅ Calibre" || echo "ℹ️ Calibre not installed (needed for MOBI/AZW)"
+soffice --version 2>/dev/null && echo "✅ LibreOffice" || echo "ℹ️ LibreOffice not installed (needed for .doc files)"
 ocrmypdf --version 2>/dev/null && echo "✅ ocrmypdf" || echo "ℹ️ ocrmypdf not installed (needed for scanned PDFs)"
+tesseract --version 2>/dev/null | head -1 && echo "✅ Tesseract" || echo "ℹ️ Tesseract not installed (OCR engine, needed with ocrmypdf)"
+gs --version 2>/dev/null && echo "✅ Ghostscript" || echo "ℹ️ Ghostscript not installed (needed for corrupted PDFs)"
 
 echo -e "\n=== Resources ==="
 df -h ~ | tail -1  # Disk space

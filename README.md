@@ -119,7 +119,7 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 - **Admin Access**: Required for installation - [Details →](QUICKSTART.md#1-adminsudo-access)
 
 **Optional Tools** (format-specific):
-- Calibre (MOBI/AZW ebooks), LibreOffice (.doc files), ocrmypdf (scanned PDFs)
+- Calibre (MOBI/AZW ebooks), LibreOffice (.doc files), ocrmypdf + Tesseract (scanned PDFs), Ghostscript (corrupted PDFs)
 - [See all optional dependencies →](QUICKSTART.md#-optional-dependencies-format-specific)
 
 **Run Prerequisites Check Script**: [Verification script →](QUICKSTART.md#-prerequisites-verification-script)
@@ -236,7 +236,7 @@ Having issues? Common problems and solutions:
 ### System Requirements
 
 - **Python 3.10-3.13** (3.11+ recommended for best performance)
-- **macOS** (primary) or **Linux** (Windows not yet supported)
+- **macOS** (primary, fully tested) or **Linux** (untested — community feedback welcome)
 - **8GB RAM minimum** (16GB recommended)
   - Embedding model uses ~4GB
   - Document processing can spike to 6-8GB for large PDFs
@@ -245,10 +245,11 @@ Having issues? Common problems and solutions:
   - ~2GB for embedding models (auto-downloaded on first run)
   - ~1MB per 100-page PDF for vector database storage
 - **Claude Desktop** (required for MCP integration)
-- **Optional dependencies**:
-  - Calibre (for MOBI/AZW ebooks)
-  - LibreOffice (for .doc files)
-  - ocrmypdf (for scanned PDFs)
+- **Optional system dependencies** (install via Homebrew or apt):
+  - **Calibre** — `ebook-convert` for MOBI/AZW/AZW3 ebook processing
+  - **LibreOffice** — `soffice` for legacy `.doc` file conversion
+  - **ocrmypdf + Tesseract** — OCR for scanned PDFs (auto-detected when < 20% text)
+  - **Ghostscript** — `gs` for cleaning corrupted/malformed PDFs that fail standard extraction
 
 ### Configuration Options
 
@@ -362,6 +363,7 @@ uv pip install -e ".[document-processing,services]"
 # Main commands
 ragdex-mcp            # Start MCP server
 ragdex-index          # Start background indexer
+ragdex-index --retry  # Clear failed list and re-attempt failed documents
 ragdex-web            # Launch web dashboard
 
 # Management commands
