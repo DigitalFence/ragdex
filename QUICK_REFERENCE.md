@@ -13,7 +13,7 @@ uv pip install ragdex
 pip install ragdex
 
 # With optional extras
-pip install ragdex[document-processing,services]
+pip install 'ragdex[doc-support,services]'
 ```
 
 ### Install from Source (Development)
@@ -24,7 +24,7 @@ cd ragdex
 pip install -e .
 
 # With optional extras
-pip install -e ".[document-processing,services]"
+pip install -e ".[doc-support,services]"
 ```
 
 ## Optional System Dependencies

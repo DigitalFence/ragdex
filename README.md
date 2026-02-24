@@ -322,17 +322,14 @@ If you already have other MCP servers, add ragdex to the existing structure:
 <summary>📦 Install with Optional Dependencies</summary>
 
 ```bash
-# Document processing extras (using uv - recommended)
-uv pip install ragdex[document-processing]
+# Legacy .doc file support (using uv - recommended)
+uv pip install --python ~/ragdex_env/bin/python 'ragdex[doc-support]'
 
-# Service management
-uv pip install ragdex[services]
+# Daemon mode for ragdex-index --daemon
+uv pip install --python ~/ragdex_env/bin/python 'ragdex[services]'
 
-# Everything
-uv pip install ragdex[document-processing,services]
-
-# Alternative: standard pip
-# pip install ragdex[document-processing,services]
+# All extras
+uv pip install --python ~/ragdex_env/bin/python 'ragdex[doc-support,services]'
 ```
 
 </details>
@@ -348,10 +345,10 @@ cd ragdex
 uv pip install -e .
 
 # With extras
-uv pip install -e ".[document-processing,services]"
+uv pip install -e ".[doc-support,services]"
 
 # Alternative: standard pip
-# pip install -e ".[document-processing,services]"
+# pip install -e ".[doc-support,services]"
 ```
 
 </details>
@@ -395,7 +392,7 @@ pkill -f ragdex 2>/dev/null || true
 uv pip install --upgrade ragdex
 
 # Or with extras
-uv pip install --upgrade ragdex[document-processing,services]
+uv pip install --upgrade 'ragdex[doc-support,services]'
 
 # Alternative: standard pip
 # pip install --upgrade ragdex
