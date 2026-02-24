@@ -571,6 +571,57 @@ Use `threading` (not `asyncio`) for the current architecture because pypdf, sent
 - For "Empty content" errors, documents may need cleaning
 - Stale locks automatically cleaned after 30 minutes
 
+### Updating the Indexer Service During Development
+
+The indexer and web monitor run as macOS LaunchAgents (`com.ragdex.indexer`, `com.ragdex.webmonitor`) from `~/Library/LaunchAgents/`. They use an **editable install** (`pip install -e .`) in `~/ragdex_env/`, which points to the repo source at `~/Development/ragdex/src/`. This means code changes in the repo are picked up on restart — no reinstall is needed.
+
+However, **running processes keep old code in memory**. After making code changes, you must restart the services:
+
+```bash
+# Restart indexer to pick up code changes
+launchctl unload ~/Library/LaunchAgents/com.ragdex.indexer.plist
+launchctl load ~/Library/LaunchAgents/com.ragdex.indexer.plist
+
+# Restart web monitor to pick up code changes
+launchctl unload ~/Library/LaunchAgents/com.ragdex.webmonitor.plist
+launchctl load ~/Library/LaunchAgents/com.ragdex.webmonitor.plist
+```
+
+Alternatively, toggle services off/on from **System Settings > General > Login Items & Extensions > Allow in the Background**.
+
+**If the indexer crashed and left stale state**, reset both status files before restarting:
+
+```bash
+# Reset stale indexing state
+python3 -c "
+import json
+from datetime import datetime
+for f in ['index_status.json', 'indexing_progress.json']:
+    path = '$HOME/.ragdex/chroma_db/' + f
+    with open(path, 'w') as fh:
+        json.dump({'status': 'idle', 'timestamp': datetime.now().isoformat()} if 'status' in f else {}, fh)
+print('Reset status files')
+"
+
+# Check for false failures (documents in both book_index.json AND failed_pdfs.json)
+python3 -c "
+import json
+idx = json.load(open('$HOME/.ragdex/chroma_db/book_index.json'))
+failed = json.load(open('$HOME/.ragdex/chroma_db/failed_pdfs.json'))
+false_failures = [k for k in failed if k in idx]
+if false_failures:
+    print('False failures (already indexed, remove from failed list):')
+    for f in false_failures: print(f'  {f}')
+else:
+    print('No false failures found')
+"
+```
+
+**Key paths:**
+- State files: `~/.ragdex/chroma_db/` (`index_status.json`, `indexing_progress.json`, `book_index.json`, `failed_pdfs.json`)
+- Service logs: `~/.ragdex/logs/` (`ragdex_indexer_stdout.log`, `ragdex_indexer_stderr.log`)
+- Books directory: Configured via `PERSONAL_LIBRARY_DOC_PATH` in the plist (currently `/Users/hpoliset/SpiritualLibrary`)
+
 ## Environment Variables
 
 ### Path Configuration
