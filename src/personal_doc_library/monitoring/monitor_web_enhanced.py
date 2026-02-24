@@ -307,6 +307,21 @@ HTML_TEMPLATE = """
             background: #d97706;
         }
         
+        .skip-button {
+            padding: 5px 10px;
+            background: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-left: 5px;
+        }
+
+        .skip-button:hover {
+            background: #4b5563;
+        }
+
         .ocr-button {
             padding: 5px 10px;
             background: #8b5cf6;
@@ -317,11 +332,11 @@ HTML_TEMPLATE = """
             font-size: 0.9em;
             margin-left: 5px;
         }
-        
+
         .ocr-button:hover {
             background: #7c3aed;
         }
-        
+
         .ocr-button:disabled {
             background: #d1d5db;
             cursor: not-allowed;
@@ -567,22 +582,48 @@ HTML_TEMPLATE = """
                     statusText.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
                     statusTime.textContent = 'Last updated: ' + new Date(data.timestamp).toLocaleString();
                     
-                    // Update progress if indexing
+                    // Update progress if indexing or if progress data shows active work
                     const progressContainer = document.getElementById('progress-container');
-                    if (data.status === 'indexing' && data.details) {
+                    const activeStages = ['loading', 'extracting', 'chunking', 'embedding'];
+                    const isActivelyProcessing = data.details && data.details.stage && activeStages.includes(data.details.stage);
+                    if ((data.status === 'indexing' || isActivelyProcessing) && data.details) {
+                        // Override displayed status when progress shows active work
+                        if (isActivelyProcessing && data.status !== 'indexing') {
+                            indicator.className = 'status-indicator status-indexing';
+                            statusText.textContent = 'Indexing';
+                        }
                         progressContainer.style.display = 'block';
-                        const progress = data.details.progress || '0/0';
-                        const [current, total] = progress.split('/').map(n => parseInt(n));
-                        const percentage = total > 0 ? (current / total * 100) : 0;
-                        const remaining = total - current;
-                        
-                        document.getElementById('progress-fill').style.width = percentage + '%';
-                        document.getElementById('progress-text').textContent = 
-                            `Progress: ${current}/${total} (${Math.round(percentage)}%)`;
-                        
-                        // Show remaining books in progress
-                        document.getElementById('remaining-info').innerHTML = 
-                            `📚 Processing ${current} of ${total} books (${remaining} remaining)`;
+
+                        if (data.details.progress) {
+                            const [current, total] = data.details.progress.split('/').map(n => parseInt(n));
+                            const percentage = total > 0 ? (current / total * 100) : 0;
+                            const remaining = total - current;
+                            document.getElementById('progress-fill').style.width = percentage + '%';
+                            document.getElementById('progress-text').textContent =
+                                `Progress: ${current}/${total} (${Math.round(percentage)}%)`;
+                            document.getElementById('remaining-info').innerHTML =
+                                `📚 Processing ${current} of ${total} books (${remaining} remaining)`;
+                        } else if (data.details.current_batch) {
+                            // No document-level progress but batch info available
+                            const batchMatch = data.details.current_batch.match(/Batch (\d+)\/(\d+)/);
+                            if (batchMatch) {
+                                const batchCurrent = parseInt(batchMatch[1]);
+                                const batchTotal = parseInt(batchMatch[2]);
+                                const percentage = batchTotal > 0 ? (batchCurrent / batchTotal * 100) : 0;
+                                document.getElementById('progress-fill').style.width = percentage + '%';
+                                document.getElementById('progress-text').textContent =
+                                    `Embedding: batch ${batchCurrent}/${batchTotal} (${Math.round(percentage)}%)`;
+                            } else {
+                                document.getElementById('progress-text').textContent =
+                                    `Processing: ${data.details.current_batch}`;
+                            }
+                            document.getElementById('remaining-info').innerHTML =
+                                `📦 ${(data.details.chunks_generated || 0).toLocaleString()} chunks from ${(data.details.total_pages || 0).toLocaleString()} pages`;
+                        } else {
+                            document.getElementById('progress-fill').style.width = '0%';
+                            document.getElementById('progress-text').textContent = `Stage: ${data.details.stage || 'processing'}`;
+                            document.getElementById('remaining-info').innerHTML = '';
+                        }
                         
                         if (data.details.current_file) {
                             let fileInfo = `<strong>Processing:</strong> ${data.details.current_file}`;
@@ -849,14 +890,15 @@ HTML_TEMPLATE = """
             let html = '<div class="failed-books-section">';
             
             for (const [bookName, details] of Object.entries(failedBooks)) {
-                const failedDate = new Date(details.failed_at).toLocaleString();
-                
+                const failedDate = new Date(details.failed_at || details.skipped_at).toLocaleString();
+                const isSkipped = details.error === 'Skipped by user';
                 html += `
                     <div class="failed-book-item">
                         <strong>${bookName}</strong>
                         <div class="error-message">${details.error}</div>
-                        <div class="timestamp">Failed at: ${failedDate} | Attempts: ${details.retry_count}</div>
+                        <div class="timestamp">${isSkipped ? 'Skipped' : 'Failed'} at: ${failedDate}${details.retry_count ? ' | Attempts: ' + details.retry_count : ''}</div>
                         <button class="retry-button" onclick="retryBook('${bookName}')">Retry</button>
+                        ${!isSkipped ? `<button class="skip-button" onclick="skipBook('${bookName}')">Skip</button>` : ''}
                         <button class="ocr-button" onclick="ocrBook('${bookName}', '')">Try OCR</button>
                     </div>
                 `;
@@ -880,6 +922,21 @@ HTML_TEMPLATE = """
             }
         }
         
+        function skipBook(bookName) {
+            if (confirm(`Skip indexing ${bookName}? It will stay in the failed list and won't be retried automatically.`)) {
+                fetch(`/api/skip/${encodeURIComponent(bookName)}`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        loadFailedBooks();
+                        updateStats();
+                    })
+                    .catch(error => {
+                        alert('Error skipping book: ' + error);
+                    });
+            }
+        }
+
         function ocrBook(bookName, bookPath) {
             if (confirm(`Run OCR on ${bookName}? This may take several minutes.`)) {
                 // Disable the button to prevent multiple clicks
@@ -1046,6 +1103,9 @@ def api_status():
                 status_data['details']['chunks_generated'] = progress_data.get('chunks_generated')
                 status_data['details']['current_batch'] = progress_data.get('current_page')
                 status_data['details']['total_pages'] = progress_data.get('total_pages')
+                # Include current_file from progress if not already set
+                if progress_data.get('current_file') and not status_data['details'].get('current_file'):
+                    status_data['details']['current_file'] = progress_data['current_file']
         except:
             pass
     
@@ -1271,6 +1331,29 @@ def api_retry_book(book_name):
             return jsonify({'success': False, 'message': str(e)})
     
     return jsonify({'success': False, 'message': 'Failed books file not found'})
+
+@app.route('/api/skip/<path:book_name>', methods=['POST'])
+def api_skip_book(book_name):
+    """Mark a document to be skipped (kept in failed list)"""
+    try:
+        failed_pdfs = {}
+        if os.path.exists(FAILED_PDFS_FILE):
+            with open(FAILED_PDFS_FILE, 'r') as f:
+                failed_pdfs = json.load(f)
+
+        failed_pdfs[book_name] = {
+            'error': 'Skipped by user',
+            'cleaned': False,
+            'skipped_at': datetime.now().isoformat(),
+            'full_path': os.path.join(BOOKS_DIR, book_name)
+        }
+
+        with open(FAILED_PDFS_FILE, 'w') as f:
+            json.dump(failed_pdfs, f, indent=2)
+
+        return jsonify({'success': True, 'message': f'Marked {book_name} as skipped.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/ocr', methods=['POST'])
 def api_ocr_book():
