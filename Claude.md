@@ -98,32 +98,53 @@ python -m personal_doc_library.monitoring.monitor_web_enhanced  # Start web dash
 
 ## Claude Desktop Configuration
 
-**Critical**: Must use `venv_mcp` virtual environment with absolute paths:
+### Recommended: uvx (Zero-Install)
+**Simplest setup — no virtual environment management needed.**
+`uvx` (from [uv](https://docs.astral.sh/uv/)) automatically creates an isolated environment, installs ragdex, and runs the MCP server. This is the standard pattern for Python MCP servers.
 
-### Minimal Configuration
 ```json
 {
   "mcpServers": {
     "personal-library": {
-      "command": "/path/to/your/ragdex/venv_mcp/bin/python",
-      "args": ["-m", "personal_doc_library.servers.mcp_complete_server"],
+      "command": "uvx",
+      "args": ["ragdex-mcp"],
       "env": {
-        "PYTHONPATH": "/path/to/your/ragdex/src",
-        "PYTHONUNBUFFERED": "1"
+        "MCP_WARMUP_ON_START": "true",
+        "MCP_INIT_TIMEOUT": "30",
+        "MCP_TOOL_TIMEOUT": "15"
       }
     }
   }
 }
 ```
 
-### Recommended Production Configuration
-**Includes warmup to avoid 15-20 second delay on first tool call:**
+Install uv if not already available: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+### Alternative: pipx (Permanent Installation)
+```bash
+pipx install ragdex
+```
+```json
+{
+  "mcpServers": {
+    "personal-library": {
+      "command": "ragdex-mcp",
+      "env": {
+        "MCP_WARMUP_ON_START": "true"
+      }
+    }
+  }
+}
+```
+
+### Advanced: Manual venv (For Development/Contributors)
+Use `uv pip install -e .` in a virtual environment for editable installs:
 
 ```json
 {
   "mcpServers": {
     "personal-library": {
-      "command": "/path/to/your/ragdex/venv_mcp/bin/python",
+      "command": "/path/to/your/ragdex_env/bin/python",
       "args": ["-m", "personal_doc_library.servers.mcp_complete_server"],
       "env": {
         "PYTHONPATH": "/path/to/your/ragdex/src",
@@ -140,21 +161,35 @@ python -m personal_doc_library.monitoring.monitor_web_enhanced  # Start web dash
 ## Development Guidelines
 
 ### Python Environment
-- **MUST use `venv_mcp`** (ARM64 virtual environment) for MCP server
-- **Always use `venv_mcp/bin/python`** instead of plain python for indexing
+- **Prefer `uv`** for all pip operations and running services
+- Use `uv pip install -e .` for editable development installs
 - Python 3.9+ required (3.11 recommended)
 
 ### Document Processing Pipeline
 1. **Discovery**: Scan directory for supported formats (PDF, Word, EPUB, MOBI/AZW/AZW3)
 2. **Hash Checking**: MD5 comparison for change detection
 3. **Processing**: Document → Loader → Text Extraction → Chunking → Categorization → Embedding → Vector Storage
+   - Large PDFs (>50MB) use incremental page-by-page extraction via `_load_pdf_with_progress()` with progress reporting every 100 pages
+   - Timeouts are page-count-aware for PDFs (3s/page, capped at 4 hours) with adaptive extensions
 4. **Error Handling**: Timeout protection, automatic PDF cleaning, failed document tracking, MOBI conversion via Calibre
+5. **Skip/Retry**: Users can skip or retry failed documents via the web monitor UI or `ragdex-index --skip <rel_path>`
 
 ### Vector Storage Details
 - **Model**: sentence-transformers/all-mpnet-base-v2 (768-dimensional)
 - **Database**: ChromaDB with persistent storage
 - **Chunking**: 1200 characters with 150 character overlap
 - **Categories**: practice, energy_work, philosophy, general
+
+### Large File and Long-Running Operation Guidelines
+
+When working with document processing code, especially `shared_rag.py`:
+
+1. **Never use file size alone for timeout budgets** — a 200MB PDF can have 50 pages or 40,000 pages. Always check content density (page count for PDFs) and adjust timeouts accordingly.
+2. **Every long-running phase must emit progress** — if a phase takes more than 30 seconds, it must write to `indexing_progress.json` so the adaptive timeout loop can detect liveness and extend. A blocking call with no progress output will be killed by the watchdog.
+3. **Use incremental processing for large files** — instead of loading an entire large document in one shot (`loader.load()`), process it incrementally (page-by-page for PDFs) to emit progress and enable timeout extensions.
+4. **Scale max_extensions with file size** — small files need fewer extensions; large/dense files may need 10-20 extensions to complete embedding of hundreds of thousands of chunks.
+5. **Test with the actual large file** — the Osho Books PDF (199MB, 39,883 pages, ~181K chunks) is the stress test. Any timeout or progress change should be verified against it.
+6. **Web monitor must reflect actual state** — the `index_status.json` and `indexing_progress.json` can diverge (status says "idle" while progress shows active embedding). The web UI must check both and show the true state.
 
 ### Testing
 - **No formal test suite exists** - high-priority contribution area
@@ -439,12 +474,70 @@ test_create_directory_safe
 
 **Apply these principles to all new scripts and when enhancing existing ones.**
 
+### Library-Specific Coding Standards
+
+#### ChromaDB
+- **Batch size**: 50-150 is the sweet spot. Hard max per `add()` is ~5,461 embeddings. Never insert one vector at a time.
+- **Use `upsert()`** instead of `add()` when documents may already exist (re-indexing scenarios).
+- **Thread safety**: Thread-safe within a single process. For multi-process concurrent access, use HTTP Client/Server mode or file-based locking (current approach with `IndexLock` is correct).
+- **Persistent client**: Use `chromadb.PersistentClient(path=...)` for single-process access.
+
+#### LangChain (Deprecation Warnings — Must Fix Before v1.0)
+The following imports are deprecated and will break on LangChain 1.0:
+
+| Current (deprecated) | Replacement | Package to add |
+|---|---|---|
+| `langchain_community.embeddings.HuggingFaceEmbeddings` | `langchain_huggingface.HuggingFaceEmbeddings` | `langchain-huggingface` |
+| `langchain_community.vectorstores.Chroma` | `langchain_chroma.Chroma` | `langchain-chroma` |
+| `langchain.schema.Document` | `langchain_core.documents.Document` | `langchain-core` |
+| `langchain.text_splitter.RecursiveCharacterTextSplitter` | `langchain_text_splitters.RecursiveCharacterTextSplitter` | `langchain-text-splitters` |
+
+#### sentence-transformers
+- **Load once, reuse everywhere** — model loading takes 15-20s and ~420MB memory. The singleton pattern in `SharedRAG.__init__()` is correct.
+- **Always batch encode** — pass lists to `model.encode(texts, batch_size=32)`, never encode one-by-one in a loop.
+- **Max sequence length**: `all-mpnet-base-v2` supports 384 tokens. Ensure chunk sizes from the splitter don't exceed this.
+- **Thread safety**: `encode()` is thread-safe for read-only inference on a shared model instance.
+
+#### pypdf
+- **Use `pypdf` (lowercase), NOT `PyPDF2`** — PyPDF2 is fully deprecated. Remove `pypdf2` from dependencies.
+- **Use `strict=False`** when creating `PdfReader` to handle mildly malformed PDFs.
+- **Per-page error handling**: Wrap individual page extraction in try/except since single pages can fail while others succeed.
+
+#### Flask (Web Monitor)
+- **Use `jsonify()`** for all API responses.
+- **Add JSON error handlers** for 404/500 instead of returning default HTML.
+- **Never `debug=True` in production**.
+- **Mutable globals need locks** — read-only module-level variables (DB_DIR, etc.) are safe.
+
+#### MCP Server
+- **Stdout discipline is critical**: Only JSON-RPC messages on stdout. All logs to stderr.
+- **Consider FastMCP migration**: The `mcp` package (v1.7+) includes FastMCP with `@mcp.tool()` decorators that auto-generate schemas from type hints, reducing boilerplate ~5x.
+- **Never block the main event loop** with synchronous operations; use background threads for RAG initialization.
+
+#### watchdog (File System Monitoring)
+- **Never do heavy processing in event handler callbacks** — queue events and process in a worker thread (current approach is correct).
+- **Always design for duplicate events** — file systems fire multiple events per logical change.
+- **Avoid `PollingObserver`** except for network filesystems; native observers (FSEvents on macOS) are much more efficient.
+
+### Threading vs Async Decision
+
+Use `threading` (not `asyncio`) for the current architecture because pypdf, sentence-transformers, and ChromaDB are all synchronous libraries. Use `ProcessPoolExecutor` only for CPU-bound PDF text extraction. Use `ThreadPoolExecutor` for I/O-bound file reading and ChromaDB writes. Prefer batching over threading: 100 texts in one `encode()` call is faster than 10 threads encoding 10 texts each.
+
 ## Known Issues and Solutions
 
 ### LaunchAgent Permissions (macOS)
 - **Issue**: LaunchAgent services restricted by sandboxing
 - **Solution**: Use shell script wrapper (`scripts/index_monitor_service.sh`)
 - **Details**: See `docs/LAUNCHAGENT_PERMISSIONS_SOLUTION.md`
+
+### Large File Indexing Timeouts (v0.3.8 regression)
+- **Issue**: Page-dense PDFs (e.g., 199MB / 39,883 pages) hit the 900s timeout because timeout tiers are based solely on file size, not page count. The loading phase (`loader.load()`) emits no progress, so the adaptive timeout extension cannot detect activity and help.
+- **Root cause**: A 199MB file falls into the `< 200MB` bucket (900s), but 40K pages need far more than 15 minutes.
+- **Solution (v0.3.9)**: Three-pronged fix:
+  1. **Page-count timeout boost**: After the size-based timeout, check PDF page count via `pypdf` and boost timeout to `page_count * 3` (capped at 4 hours).
+  2. **Incremental PDF loading**: For PDFs >50MB, use `_load_pdf_with_progress()` which extracts pages one at a time via `pypdf`, writing progress every 100 pages so the adaptive timeout can extend.
+  3. **Scaled max_extensions**: `>100MB` → 20 extensions, `>50MB` → 10, otherwise 5.
+- **Lesson**: Timeout budgets must account for content density (page count), not just file size. Always ensure long-running operations emit progress so watchdog loops can detect liveness.
 
 ### Common Troubleshooting
 - If indexing finds 0 documents, check CloudDocs permissions

@@ -804,6 +804,8 @@ def main():
                       help='Run in service mode (longer delays, lower priority)')
     parser.add_argument('--retry', action='store_true',
                       help='Clear failed documents list so they are re-attempted on next sync')
+    parser.add_argument('--skip', type=str, metavar='REL_PATH',
+                      help='Mark a document as skipped (add to failed list so it is not indexed)')
 
     args = parser.parse_args()
 
@@ -830,6 +832,24 @@ def main():
                 print(f"Error clearing failed documents list: {e}")
         else:
             print("No failed documents list found — nothing to clear")
+
+    # Handle --skip: mark a specific document as skipped
+    if args.skip:
+        failed_file = os.path.join(db_dir, "failed_pdfs.json")
+        failed_pdfs = {}
+        if os.path.exists(failed_file):
+            with open(failed_file, 'r') as f:
+                failed_pdfs = json.load(f)
+        failed_pdfs[args.skip] = {
+            'error': 'Skipped by user',
+            'cleaned': False,
+            'skipped_at': datetime.now().isoformat(),
+            'full_path': os.path.join(books_dir, args.skip)
+        }
+        with open(failed_file, 'w') as f:
+            json.dump(failed_pdfs, f, indent=2)
+        print(f"Marked '{args.skip}' as skipped")
+        return 0
 
     # Configure for service mode
     if args.service:

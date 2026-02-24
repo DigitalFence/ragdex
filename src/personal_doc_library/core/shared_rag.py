@@ -1129,6 +1129,47 @@ class SharedRAG:
         
         return type_mapping.get(file_ext, 'Document')
     
+    def _load_pdf_with_progress(self, filepath, rel_path, progress_file):
+        """Load a large PDF with page-level progress reporting.
+
+        Instead of calling loader.load() which blocks without progress,
+        this extracts pages one at a time via pypdf so the adaptive timeout
+        loop can see continuous progress updates.
+        """
+        from pypdf import PdfReader
+        from langchain.schema import Document
+
+        reader = PdfReader(filepath)
+        total_pages = len(reader.pages)
+        logger.info(f"PDF has {total_pages} pages, extracting with progress reporting")
+
+        documents = []
+        batch_size = 100  # Report progress every 100 pages
+
+        for i, page in enumerate(reader.pages):
+            try:
+                text = page.extract_text() or ""
+                if text.strip():
+                    documents.append(Document(
+                        page_content=text,
+                        metadata={"page": i + 1, "source": filepath}
+                    ))
+            except Exception as e:
+                logger.debug(f"Error extracting page {i + 1}: {e}")
+
+            # Update progress every batch_size pages
+            if (i + 1) % batch_size == 0 or (i + 1) == total_pages:
+                self.update_progress(
+                    "loading",
+                    current_page=i + 1,
+                    total_pages=total_pages,
+                    current_file=rel_path
+                )
+                logger.info(f"Loaded {i + 1}/{total_pages} pages from {rel_path}")
+
+        logger.info(f"Extracted {len(documents)} pages with content from {total_pages} total pages")
+        return documents
+
     def process_document_with_timeout(self, filepath, rel_path=None, timeout_minutes=60):
         """Process any supported document with timeout protection"""
         # For very large files, increase timeout proportionally
@@ -1261,8 +1302,22 @@ class SharedRAG:
                 # Allow up to 2 hours for massive documents
                 timeout_seconds = 7200  # 120 minutes for files >300MB
             
+            # For PDFs, also consider page count — a dense PDF needs much more time
+            if filepath.lower().endswith('.pdf'):
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(filepath)
+                    page_count = len(reader.pages)
+                    # Allow ~3 seconds per page, capped at 4 hours
+                    page_based_timeout = min(page_count * 3, 14400)
+                    if page_based_timeout > timeout_seconds:
+                        logger.info(f"PDF has {page_count} pages, increasing timeout from {timeout_seconds}s to {page_based_timeout}s")
+                        timeout_seconds = page_based_timeout
+                except Exception as e:
+                    logger.warning(f"Could not determine PDF page count for timeout adjustment: {e}")
+
             logger.info(f"Processing with {timeout_seconds}s timeout for {file_size_mb:.1f}MB file")
-            
+
             # Use threading to implement timeout with progress monitoring
             import threading
             import queue
@@ -1276,25 +1331,30 @@ class SharedRAG:
                 try:
                     # Get file extension for cleanup check
                     file_ext = os.path.splitext(working_filepath)[1].lower()
-                    
-                    loader = self.get_document_loader(working_filepath)
-                    docs = loader.load()
-                    
-                    # EPUB file descriptor cleanup
-                    # EPUBs can leave many file descriptors open, so we need to ensure cleanup
-                    if file_ext == '.epub':
-                        import gc
-                        # Force garbage collection to close any lingering file handles
-                        gc.collect()
-                        # If the loader has any cleanup methods, call them
-                        if hasattr(loader, 'close'):
-                            loader.close()
-                        if hasattr(loader, '__del__'):
-                            try:
-                                loader.__del__()
-                            except:
-                                pass
-                    
+
+                    # For large PDFs, use incremental loading with progress reporting
+                    # so the adaptive timeout can see continuous progress
+                    if file_ext == '.pdf' and file_size_mb > 50:
+                        docs = self._load_pdf_with_progress(working_filepath, rel_path, progress_file)
+                    else:
+                        loader = self.get_document_loader(working_filepath)
+                        docs = loader.load()
+
+                        # EPUB file descriptor cleanup
+                        # EPUBs can leave many file descriptors open, so we need to ensure cleanup
+                        if file_ext == '.epub':
+                            import gc
+                            # Force garbage collection to close any lingering file handles
+                            gc.collect()
+                            # If the loader has any cleanup methods, call them
+                            if hasattr(loader, 'close'):
+                                loader.close()
+                            if hasattr(loader, '__del__'):
+                                try:
+                                    loader.__del__()
+                                except:
+                                    pass
+
                     result_queue.put(docs)
                 except Exception as e:
                     exception_queue.put(e)
@@ -1309,7 +1369,13 @@ class SharedRAG:
             last_progress_time = start_time
             last_progress_value = None
             extensions_granted = 0
-            max_extensions = 5  # Allow up to 5 extensions
+            # Scale max_extensions by file size — large files need more headroom
+            if file_size_mb > 100:
+                max_extensions = 20
+            elif file_size_mb > 50:
+                max_extensions = 10
+            else:
+                max_extensions = 5
             
             # Calculate extension time based on file size
             # Small files: 5 minutes extension
