@@ -4,6 +4,7 @@ Background Index Monitor for Personal Document Library
 Watches for changes and automatically indexes new/modified PDFs
 """
 
+import json
 import os
 import signal
 import time
@@ -766,16 +767,35 @@ def main():
                       help='Run as daemon (background process)')
     parser.add_argument('--service', action='store_true',
                       help='Run in service mode (longer delays, lower priority)')
-    
+    parser.add_argument('--retry', action='store_true',
+                      help='Clear failed documents list so they are re-attempted on next sync')
+
     args = parser.parse_args()
-    
+
     # Create directories if needed (use config defaults if not specified)
     config.ensure_directories()
     books_dir = args.books_dir if args.books_dir is not None else str(config.books_directory)
     db_dir = args.db_dir if args.db_dir is not None else str(config.db_directory)
     os.makedirs(books_dir, exist_ok=True)
     os.makedirs(db_dir, exist_ok=True)
-    
+
+    # Handle --retry: clear the failed documents list so they are re-attempted
+    if args.retry:
+        failed_file = os.path.join(db_dir, "failed_pdfs.json")
+        if os.path.exists(failed_file):
+            try:
+                with open(failed_file, 'r') as f:
+                    failed_docs = json.load(f)
+                count = len(failed_docs)
+                os.remove(failed_file)
+                logger.info(f"Cleared {count} entries from failed documents list")
+                print(f"Cleared {count} failed documents — they will be re-attempted on next sync")
+            except Exception as e:
+                logger.error(f"Error clearing failed documents list: {e}")
+                print(f"Error clearing failed documents list: {e}")
+        else:
+            print("No failed documents list found — nothing to clear")
+
     # Configure for service mode
     if args.service:
         logger.info("Running in service mode (LaunchAgent)")

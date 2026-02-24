@@ -162,6 +162,11 @@ DOCS_PATH="${DOCS_PATH/#\~/$HOME}"
 DB_PATH="${DB_PATH/#\~/$HOME}"
 LOGS_PATH="${LOGS_PATH/#\~/$HOME}"
 
+# Build PATH for LaunchAgent services
+# macOS LaunchAgents get a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin),
+# so we include common tool locations (Homebrew, etc.) for soffice, ebook-convert, etc.
+LAUNCH_AGENT_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
 # Show configuration summary
 echo ""
 echo "${BLUE}📋 Configuration Summary:${NC}"
@@ -325,6 +330,8 @@ cat > "$INDEX_PLIST" << EOF
         <string>1</string>
         <key>CHROMA_TELEMETRY</key>
         <string>false</string>
+        <key>PATH</key>
+        <string>$LAUNCH_AGENT_PATH</string>
     </dict>
 
     <key>StandardOutPath</key>
@@ -377,6 +384,8 @@ cat > "$WEB_PLIST" << EOF
         <string>1</string>
         <key>CHROMA_TELEMETRY</key>
         <string>false</string>
+        <key>PATH</key>
+        <string>$LAUNCH_AGENT_PATH</string>
     </dict>
 
     <key>StandardOutPath</key>
