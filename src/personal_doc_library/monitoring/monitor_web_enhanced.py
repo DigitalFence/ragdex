@@ -1168,9 +1168,9 @@ def api_lock_status():
                     except:
                         pass
             
-            # Consider old locks as stale (2 minutes with periodic updates)
-            if lock_info['age_minutes'] > 2:
-                lock_info['stale'] = True
+            # Only consider a lock stale if the owning process is dead
+            # (handled above). Long embedding operations can hold the lock
+            # for 30+ minutes, so age alone is not a reliable indicator.
                 
         except:
             pass
@@ -1254,11 +1254,17 @@ def api_retry_book(book_name):
             
             if book_name in failed_pdfs:
                 del failed_pdfs[book_name]
-                
+
                 with open(FAILED_PDFS_FILE, 'w') as f:
                     json.dump(failed_pdfs, f, indent=2)
-                
-                return jsonify({'success': True, 'message': f'Cleared {book_name} from failed list. Run indexing to retry.'})
+
+                # Touch the document file to trigger the filesystem watcher,
+                # which will re-scan and pick up the now-unfailed document
+                doc_path = os.path.join(BOOKS_DIR, book_name)
+                if os.path.exists(doc_path):
+                    os.utime(doc_path)
+
+                return jsonify({'success': True, 'message': f'Cleared {book_name} from failed list. Indexer will pick it up automatically.'})
             else:
                 return jsonify({'success': False, 'message': 'Book not found in failed list'})
         except Exception as e:

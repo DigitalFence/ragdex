@@ -2,6 +2,20 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.3.8] - 2026-02-24 - Indexer Stability and Web Retry Fixes
+
+### Fixed
+- **Web Retry Now Triggers Indexer**: Clicking retry on the web monitor now touches the document file (`os.utime`) to trigger the filesystem watcher, so the indexer automatically picks up retried documents without manual intervention.
+- **Duplicate/Circular Processing**: Fixed race condition where the same documents were processed 4-9 times concurrently. Added `_processing_files` set with thread-safe locking to deduplicate across overlapping `process_pending_updates` calls.
+- **Progress Display Overflow**: Fixed "Progress: 20/8 (250%)" bug where `current_document_index` accumulated across batches. Now resets to 0 at the start of each batch.
+- **False Stale Lock Warning**: Removed 2-minute age-based stale lock threshold. Long embedding operations (30+ minutes) are normal; only dead-process detection is used now.
+- **Timer Batching Delay**: `schedule_update()` no longer resets the timer on each filesystem event. Rapid events (e.g. multiple retry clicks) are batched into the next already-scheduled run instead of pushing the timer out indefinitely.
+- **Indexer Crash on Restart**: Added missing `import sys` — `signal_handler` called `sys.exit(0)` but `sys` was not imported, causing a `NameError` crash on SIGTERM.
+- **Silent Thread Exceptions**: Wrapped `process_pending_updates` in try/except with `exc_info` logging so exceptions in `threading.Timer` threads are no longer silently swallowed.
+
+### Enhanced
+- **Post-Processing Re-scheduling**: After finishing a batch, the indexer checks for events that arrived during processing and schedules another run automatically.
+
 ## [0.3.7] - 2026-02-24 - LaunchAgent PATH Fix, --retry Flag, Doc Fixes
 
 ### Fixed
