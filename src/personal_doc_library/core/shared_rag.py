@@ -1549,17 +1549,17 @@ class SharedRAG:
             self.save_book_index()
             
             logger.info(f"Successfully indexed {rel_path}: {len(chunks)} chunks from {total_sections} sections")
-            
-            # Remove from failed list if it was previously failed
-            self.remove_from_failed_list(rel_path)
-            
-            # Clean up temporary file if it was created
-            self.cleanup_temp_file(working_filepath, filepath)
-            
-            # Force garbage collection to free memory
-            import gc
-            gc.collect()
-            
+
+            # Post-success cleanup — errors here must NOT trigger handle_failed_document
+            # because the document was already successfully indexed above
+            try:
+                self.remove_from_failed_list(rel_path)
+                self.cleanup_temp_file(working_filepath, filepath)
+                import gc
+                gc.collect()
+            except Exception as cleanup_err:
+                logger.warning(f"Post-indexing cleanup error for {rel_path} (indexing succeeded): {cleanup_err}")
+
             return True
             
         except Exception as e:
@@ -1729,7 +1729,8 @@ class SharedRAG:
         os.makedirs(tmp_dir, exist_ok=True)
         
         # Paths
-        temp_cleaned = os.path.join(tmp_dir, pdf_name + ".cleaned")
+        name_stem, name_ext = os.path.splitext(pdf_name)
+        temp_cleaned = os.path.join(tmp_dir, name_stem + "_cleaned" + name_ext)
         
         # Try to clean
         if PDFCleaner.clean_pdf(filepath, temp_cleaned):

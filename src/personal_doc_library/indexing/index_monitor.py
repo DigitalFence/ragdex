@@ -553,99 +553,99 @@ class IndexMonitor:
                     max_workers = self._calculate_safe_workers(adaptive_workers)
                     
                     logger.info(f"Processing regular files with {max_workers} parallel workers (CPUs: {cpu_count}, Available RAM: {available_memory_gb:.1f}GB)")
-                
-                def process_single_document(doc_info):
-                    """Process a single document with thread-safe progress tracking"""
-                    nonlocal success_count, failed_count
-                    
-                    filepath, rel_path, index = doc_info
-                    
-                    # Check if paused before processing
-                    self.wait_if_paused()
-                    
-                    # Check if still running after pause
-                    if not self.running:
-                        return None
-                    
-                    logger.info(f"Processing document {index}/{len(documents_to_index)}: {rel_path}")
-                    
-                    # Check if file is in failed list before processing
-                    if self.rag.is_document_failed(rel_path):
-                        logger.info(f"Skipping previously failed file: {rel_path}")
-                        
-                        with failed_lock:
-                            failed_count += 1
-                        
+
+                    def process_single_document(doc_info):
+                        """Process a single document with thread-safe progress tracking"""
+                        nonlocal success_count, failed_count
+
+                        filepath, rel_path, index = doc_info
+
+                        # Check if paused before processing
+                        self.wait_if_paused()
+
+                        # Check if still running after pause
+                        if not self.running:
+                            return None
+
+                        logger.info(f"Processing document {index}/{len(documents_to_index)}: {rel_path}")
+
+                        # Check if file is in failed list before processing
+                        if self.rag.is_document_failed(rel_path):
+                            logger.info(f"Skipping previously failed file: {rel_path}")
+
+                            with failed_lock:
+                                failed_count += 1
+
+                            with progress_lock:
+                                self.current_document_index = max(self.current_document_index, index)
+                                # Update status to show we're skipping this file
+                                self.rag.update_status("indexing", {
+                                    "current_file": f"Skipping failed: {rel_path}",
+                                    "progress": f"{self.current_document_index}/{len(documents_to_index)}",
+                                    "success": success_count,
+                                    "failed": failed_count,
+                                    "percentage": round(self.current_document_index / len(documents_to_index) * 100, 1)
+                                })
+                            return False
+
+                        # Process document with timeout
+                        result = self.rag.process_document_with_timeout(filepath, rel_path)
+
+                        # Update counters thread-safely
+                        if result:
+                            with success_lock:
+                                success_count += 1
+                            logger.info(f"Successfully processed: {rel_path}")
+                        else:
+                            with failed_lock:
+                                failed_count += 1
+                            logger.warning(f"Failed to process: {rel_path}")
+
+                        # Update progress
                         with progress_lock:
                             self.current_document_index = max(self.current_document_index, index)
-                            # Update status to show we're skipping this file
                             self.rag.update_status("indexing", {
-                                "current_file": f"Skipping failed: {rel_path}",
+                                "current_file": rel_path,
                                 "progress": f"{self.current_document_index}/{len(documents_to_index)}",
                                 "success": success_count,
                                 "failed": failed_count,
-                                "percentage": round(self.current_document_index / len(documents_to_index) * 100, 1)
+                                "percentage": round(self.current_document_index / len(documents_to_index) * 100, 1),
+                                "parallel_workers": max_workers
                             })
-                        return False
-                    
-                    # Process document with timeout
-                    result = self.rag.process_document_with_timeout(filepath, rel_path)
-                    
-                    # Update counters thread-safely
-                    if result:
-                        with success_lock:
-                            success_count += 1
-                        logger.info(f"Successfully processed: {rel_path}")
-                    else:
-                        with failed_lock:
-                            failed_count += 1
-                        logger.warning(f"Failed to process: {rel_path}")
-                    
-                    # Update progress
-                    with progress_lock:
-                        self.current_document_index = max(self.current_document_index, index)
-                        self.rag.update_status("indexing", {
-                            "current_file": rel_path,
-                            "progress": f"{self.current_document_index}/{len(documents_to_index)}",
-                            "success": success_count,
-                            "failed": failed_count,
-                            "percentage": round(self.current_document_index / len(documents_to_index) * 100, 1),
-                            "parallel_workers": max_workers
-                        })
-                    
-                    return result
-                
-                # Process regular documents in parallel with dynamic worker adjustment
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+
+                        return result
+
+                    # Process regular documents in parallel with dynamic worker adjustment
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
                         # Prepare document info with indices, adjusting for already processed large files
-                        doc_infos = [(filepath, rel_path, self.current_document_index + i) 
+                        doc_infos = [(filepath, rel_path, self.current_document_index + i)
                                    for i, (filepath, rel_path) in enumerate(regular_files, 1)]
-                        
+
                         # Submit tasks in batches to control file descriptor usage
                         batch_size = max_workers * 2  # Process 2x workers at a time
                         processed_docs = 0
-                        
+
                         for batch_start in range(0, len(doc_infos), batch_size):
                             batch_end = min(batch_start + batch_size, len(doc_infos))
                             batch = doc_infos[batch_start:batch_end]
-                            
+
                             # Check file descriptors before each batch
                             current_fds = self._get_current_fd_usage()
                             if current_fds > self.max_file_descriptors - self.fd_reserve:
                                 logger.warning(f"High FD usage ({current_fds}/{self.max_file_descriptors}), waiting for cleanup...")
                                 time.sleep(5)  # Wait for cleanup
-                                
+
                                 # Recalculate workers if needed
                                 new_max_workers = self._calculate_safe_workers(base_workers)
                                 if new_max_workers < max_workers:
                                     logger.info(f"Reducing workers from {max_workers} to {new_max_workers} due to FD pressure")
                                     executor._max_workers = new_max_workers
                                     max_workers = new_max_workers
-                            
+
                             # Submit batch
-                            futures = {executor.submit(process_single_document, doc_info): doc_info 
+                            futures = {executor.submit(process_single_document, doc_info): doc_info
                                      for doc_info in batch}
-                            
+
                             # Process completed futures for this batch
                             for future in as_completed(futures):
                                 if not self.running:
@@ -653,11 +653,11 @@ class IndexMonitor:
                                     for f in futures:
                                         f.cancel()
                                     break
-                                
+
                                 try:
                                     result = future.result()
                                     processed_docs += 1
-                                    
+
                                     # Periodic FD check every 10 documents
                                     if processed_docs % 10 == 0:
                                         current_fds = self._get_current_fd_usage()
@@ -666,12 +666,12 @@ class IndexMonitor:
                                             import gc
                                             gc.collect()
                                             time.sleep(1)  # Brief pause for cleanup
-                                            
+
                                 except Exception as e:
                                     logger.error(f"Error processing document: {e}")
                                     with failed_lock:
                                         failed_count += 1
-                            
+
                             if not self.running:
                                 break
                 
