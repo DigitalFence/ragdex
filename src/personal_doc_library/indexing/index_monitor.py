@@ -7,6 +7,7 @@ Watches for changes and automatically indexes new/modified PDFs
 import json
 import os
 import signal
+import sys
 import time
 import logging
 from datetime import datetime
@@ -141,6 +142,8 @@ class IndexMonitor:
         self.pause_file = "/tmp/spiritual_library_index.pause"
         self.total_documents_to_process = 0
         self.current_document_index = 0
+        self._processing_files = set()  # tracks rel_paths currently being indexed
+        self._processing_lock = threading.Lock()
         
         # File descriptor management
         self.max_file_descriptors = self._get_safe_fd_limit()
@@ -383,40 +386,69 @@ class IndexMonitor:
             logger.info(f"Removed {removed_count} deleted books from index")
     
     def schedule_update(self):
-        """Schedule a batch update after a short delay"""
+        """Schedule a batch update after a short delay.
+
+        Does not reset the timer if one is already pending, so rapid events
+        (e.g. multiple retry clicks) are batched into the next scheduled run
+        without pushing the timer out indefinitely.
+        """
         with self.update_lock:
-            if self.update_timer:
-                self.update_timer.cancel()
+            if self.update_timer and self.update_timer.is_alive():
+                # Timer already pending — new events will be picked up when it fires
+                return
             self.update_timer = threading.Timer(self.batch_delay, self.process_pending_updates)
             self.update_timer.start()
-    
+
     def process_pending_updates(self):
         """Process all pending book updates"""
-        updates = self.event_handler.get_pending_updates()
-        if not updates:
-            return
-        
-        logger.info(f"Processing {len(updates)} pending file updates")
-        
-        # Use the full document discovery mechanism to ensure we don't miss any files
-        # This is especially important when directories are copied with old timestamps
-        all_documents_to_index = self.rag.find_new_or_modified_documents()
-        
-        if all_documents_to_index:
-            logger.info(f"Full scan found {len(all_documents_to_index)} documents to index")
-            self.process_documents(all_documents_to_index)
-        else:
-            logger.info("No new documents found to index")
+        try:
+            updates = self.event_handler.get_pending_updates()
+            if not updates:
+                return
+
+            logger.info(f"Processing {len(updates)} pending file updates")
+
+            # Use the full document discovery mechanism to ensure we don't miss any files
+            # This is especially important when directories are copied with old timestamps
+            all_documents_to_index = self.rag.find_new_or_modified_documents()
+
+            # Filter out files that are already being processed by another thread
+            with self._processing_lock:
+                filtered = [(fp, rp) for fp, rp in all_documents_to_index
+                            if rp not in self._processing_files]
+                if filtered:
+                    for _, rp in filtered:
+                        self._processing_files.add(rp)
+
+            if filtered:
+                logger.info(f"Full scan found {len(all_documents_to_index)} documents, {len(filtered)} new to index")
+                self.process_documents(filtered)
+            else:
+                if all_documents_to_index:
+                    logger.info(f"Full scan found {len(all_documents_to_index)} documents, all already being processed")
+                else:
+                    logger.info("No new documents found to index")
+        except Exception as e:
+            logger.error(f"Error in process_pending_updates: {e}", exc_info=True)
+        finally:
+            # If there are still pending events that arrived while we were processing,
+            # schedule another run
+            if self.event_handler.pending_updates:
+                with self.update_lock:
+                    self.update_timer = threading.Timer(self.batch_delay, self.process_pending_updates)
+                    self.update_timer.start()
     
     def process_documents(self, documents_to_index):
         """Process a list of documents with proper locking"""
+        processed_rel_paths = {rp for _, rp in documents_to_index}
         try:
             with self.rag.lock.acquire(blocking=False):
                 logger.info(f"Starting to index {len(documents_to_index)} documents")
                 logger.info(f"self.running = {self.running}")
                 
-                # Store total for progress tracking
+                # Reset progress tracking for this batch
                 self.total_documents_to_process = len(documents_to_index)
+                self.current_document_index = 0
                 success_count = 0
                 failed_count = 0
                 
@@ -663,7 +695,10 @@ class IndexMonitor:
             logger.warning("Could not acquire lock - another process may be indexing")
             # Schedule retry
             self.schedule_update()
-    
+        finally:
+            with self._processing_lock:
+                self._processing_files -= processed_rel_paths
+
     def handle_deletion(self, filepath):
         """Handle deletion of a document"""
         rel_path = os.path.relpath(filepath, self.books_directory)
