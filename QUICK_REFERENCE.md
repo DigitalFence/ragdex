@@ -13,7 +13,7 @@ uv pip install ragdex
 pip install ragdex
 
 # With optional extras
-pip install ragdex[document-processing,services]
+pip install 'ragdex[doc-support,services]'
 ```
 
 ### Install from Source (Development)
@@ -24,7 +24,26 @@ cd ragdex
 pip install -e .
 
 # With optional extras
-pip install -e ".[document-processing,services]"
+pip install -e ".[doc-support,services]"
+```
+
+## Optional System Dependencies
+
+These are **not required** for basic operation but enable additional format support:
+
+| Tool | Command | Purpose | Install (macOS) |
+|------|---------|---------|-----------------|
+| **Calibre** | `ebook-convert` | MOBI/AZW/AZW3 ebooks | `brew install --cask calibre` |
+| **LibreOffice** | `soffice` | Legacy `.doc` files | `brew install --cask libreoffice` |
+| **ocrmypdf** | `ocrmypdf` | OCR for scanned PDFs | `brew install ocrmypdf tesseract` |
+| **Ghostscript** | `gs` | Clean corrupted PDFs | `brew install ghostscript` |
+
+> **Note**: Poppler is **not required** — Ragdex uses pure-Python PDF libraries. Linux support is untested.
+
+```bash
+# Install all optional tools at once (macOS)
+brew install --cask calibre libreoffice
+brew install ocrmypdf tesseract ghostscript
 ```
 
 ## Installation with Specific Python Version
@@ -103,6 +122,9 @@ This **indexing service** watches for changes and processes documents in the bac
 # Run manually
 ragdex-index
 
+# Clear failed documents list and re-attempt on next sync
+ragdex-index --retry
+
 # Installed as service via
 ./setup_services.sh              # PyPI installation
 ./install.sh --with-services     # Source installation
@@ -115,9 +137,17 @@ ragdex-index
 - Updates ChromaDB vector database
 - Tracks failed documents
 
+**Flags:**
+- `--retry` — Clears the failed documents list (`failed_pdfs.json`) so all previously failed files are re-attempted on the next sync cycle
+- `--daemon` — Run as background daemon process
+- `--service` — Service mode (longer delays, lower priority)
+- `--books-dir PATH` — Override document directory
+- `--db-dir PATH` — Override database directory
+
 **When to use:**
 - Install as background service for automatic indexing
 - Run manually for one-time indexing
+- Use `--retry` after installing missing tools (e.g., LibreOffice, Ghostscript) to re-process previously failed documents
 
 ---
 

@@ -209,7 +209,7 @@ pip install personal-doc-library
 
 ### With optional dependencies
 ```bash
-pip install personal-doc-library[document-processing,services]
+pip install personal-doc-library[doc-support,services]
 ```
 ```
 

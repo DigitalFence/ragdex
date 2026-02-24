@@ -62,8 +62,12 @@ def handle_fix_skipped_command(relative_path: str) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Entry point for the pdlib-cli command."""
-    parser = argparse.ArgumentParser(prog="pdlib-cli", description="Utilities for the Personal Document Library")
+    """Entry point for the ragdex command."""
+    from importlib.metadata import version as pkg_version
+
+    parser = argparse.ArgumentParser(prog="ragdex", description="Utilities for the Personal Document Library")
+    parser.add_argument("--version", "-V", action="version",
+                        version=f"ragdex {pkg_version('ragdex')}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("config", help="Show configuration information")

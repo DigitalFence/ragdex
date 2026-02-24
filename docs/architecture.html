@@ -594,7 +594,7 @@
                         <li>CLI commands: <code>ragdex</code>, <code>ragdex-mcp</code>, <code>ragdex-index</code>, <code>ragdex-web</code></li>
                         <li>Package installation: <code>pip install ragdex</code></li>
                         <li>Development: <code>pip install -e .</code></li>
-                        <li>With extras: <code>pip install -e ".[document-processing,services]"</code></li>
+                        <li>With extras: <code>pip install -e ".[doc-support,services]"</code></li>
                     </ul>
                 </div>
 
@@ -900,7 +900,7 @@ source ~/ragdex_env/bin/activate
 pip install ragdex
 
 # With optional extras
-pip install ragdex[document-processing,services]</code></pre>
+pip install ragdex[doc-support,services]</code></pre>
 
             <h3>📦 Development Installation</h3>
             <pre><code># Clone repository
@@ -911,7 +911,7 @@ cd ragdex
 pip install -e .
 
 # Or with extras
-pip install -e ".[document-processing,services]"
+pip install -e ".[doc-support,services]"
 
 # Use CLI commands
 ragdex --help

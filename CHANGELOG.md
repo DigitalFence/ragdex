@@ -2,6 +2,26 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.3.7] - 2026-02-24 - LaunchAgent PATH Fix, --retry Flag, Doc Fixes
+
+### Fixed
+- **LaunchAgent PATH**: macOS LaunchAgent services now include Homebrew paths (`/opt/homebrew/bin`, `/usr/local/bin`) in their environment. Previously, services ran with a minimal PATH that excluded tools like `soffice` (LibreOffice), `ebook-convert` (Calibre), and `gs` (Ghostscript), causing `.doc` and other format processing to fail.
+- **Web Monitor Retry Route**: Fixed retry button failing for books with slashes in their path (e.g., `Osho/Rasik/...`). Flask route changed from `<book_name>` to `<path:book_name>` to match full paths.
+- **CLI prog name**: Fixed `ragdex --help` displaying as `pdlib-cli` instead of `ragdex`.
+
+### Added
+- **`ragdex-index --retry` flag**: Clears the failed documents list (`failed_pdfs.json`) before starting the monitor, so all previously failed documents are re-attempted on the next sync cycle. Useful after installing missing tools like LibreOffice or Ghostscript.
+- **`ragdex --version` / `-V` flag**: Shows the installed ragdex version using package metadata.
+
+### Documentation
+- Removed references to non-existent `document-processing` pip extra; corrected to `doc-support`
+- Removed poppler-utils from optional dependencies (not used; ragdex uses pypdf and pdfminer.six)
+- Added Ghostscript as documented optional dependency for cleaning corrupted PDFs
+- Clarified that OCR requires both ocrmypdf and Tesseract, with auto-detection details
+- Marked Linux support as untested throughout all guides
+- Added "install all optional tools at once" convenience block to QUICKSTART.md
+- Added optional system dependencies table to QUICK_REFERENCE.md
+
 ## [0.3.6] - 2025-01-25 - Bug Fixes, Subfolder Search, and Pagination
 
 ### Fixed

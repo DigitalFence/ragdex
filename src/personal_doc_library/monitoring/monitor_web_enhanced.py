@@ -1241,7 +1241,7 @@ def api_failed_books():
     
     return jsonify(failed_books)
 
-@app.route('/api/retry/<book_name>', methods=['POST'])
+@app.route('/api/retry/<path:book_name>', methods=['POST'])
 def api_retry_book(book_name):
     """Retry indexing a failed book"""
     # This endpoint would need to be implemented with actual retry logic
