@@ -96,6 +96,33 @@ python -m personal_doc_library.monitoring.monitor_web_enhanced  # Start web dash
 ./scripts/indexing_status.sh    # Check indexing status
 ```
 
+## Publishing to PyPI
+
+### Via GitHub Actions (recommended)
+1. Bump the version in `pyproject.toml`
+2. Commit and push to `main`
+3. Trigger the publish workflow:
+```bash
+# Publish to PyPI
+gh workflow run publish.yml --ref main -f test_pypi=false
+
+# Publish to TestPyPI first (for validation)
+gh workflow run publish.yml --ref main -f test_pypi=true
+```
+
+The workflow also auto-publishes when a GitHub Release is created.
+
+### Via Local (fallback)
+```bash
+uv build && uv publish --token $(awk '/^\[pypi\]/,/^\[/' ~/.pypirc | grep password | sed 's/password = //')
+```
+
+### Workflow details
+- Workflow file: `.github/workflows/publish.yml`
+- Uses `uv build` + `uv publish` (not twine — twine 5.x/6.x can't handle metadata v2.4 from hatchling)
+- Requires `PYPI_API_TOKEN` and `TEST_PYPI_API_TOKEN` repo secrets (API tokens from pypi.org, set via `gh secret set`)
+- GitHub environment protection rules: `pypi` and `testpypi` environments
+
 ## Claude Desktop Configuration
 
 ### Recommended: uvx (Zero-Install)
