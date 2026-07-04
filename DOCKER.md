@@ -8,7 +8,7 @@ The Docker setup includes three services:
 
 1. **ragdex-mcp** - MCP server for Claude Desktop integration
 2. **ragdex-index** - Background indexer that monitors and indexes documents
-3. **ragdex-web** - Web dashboard at `http://localhost:8888`
+3. **ragdex-web** - Web dashboard at `http://localhost:9999` (host port 9999 → container 8888)
 
 All services share access to:
 - **External Vector DB** (ChromaDB) - stored in `./data/chroma_db`
@@ -75,7 +75,7 @@ docker-compose logs -f
 
 ### 5. Access the Web Dashboard
 
-Open your browser to: `http://localhost:8888`
+Open your browser to: `http://localhost:9999`
 
 ## Configuration
 
@@ -297,8 +297,8 @@ docker-compose port ragdex-web 8888
 # Check logs
 docker-compose logs ragdex-web
 
-# Try accessing
-curl http://localhost:8888
+# Try accessing (host port; default 9999)
+curl http://localhost:9999
 ```
 
 ### High Memory Usage
@@ -395,13 +395,20 @@ services:
 
 ### Running on Different Port
 
-Edit `docker-compose.yml`:
+The web dashboard is published on host port **9999** by default (container
+listens on 8888). To change the host port, set `WEB_PORT` in your `.env`:
+
+```bash
+WEB_PORT=7777
+```
+
+Or edit the mapping directly in `docker-compose.yml`:
 
 ```yaml
 services:
   ragdex-web:
     ports:
-      - "9999:8888"  # Access on port 9999
+      - "7777:8888"  # Access on port 7777
 ```
 
 ## Security Considerations

@@ -63,7 +63,9 @@ services:
     container_name: ragdex-web
     command: ragdex-web
     ports:
-      - "8888:8888"
+      # Host port 9999 -> container 8888 (avoids clashing with a local
+      # ragdex-web running on 8888). Override with WEB_PORT in .env.
+      - "${WEB_PORT:-9999}:8888"
     volumes:
       # External Vector DB
       - ./data/chroma_db:/data/chroma_db
