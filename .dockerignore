@@ -39,9 +39,14 @@ logs/
 .DS_Store
 
 # Documentation
-*.md
+# NOTE: Do NOT exclude README.md — pyproject.toml sets `readme = "README.md"`,
+# so `pip install -e .` in the Dockerfile fails without it.
 docs/
 *.rst
+CHANGELOG.md
+CONTRIBUTING.md
+DOCKER.md
+PR_DESCRIPTION.md
 
 # CI/CD
 .github/

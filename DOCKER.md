@@ -29,7 +29,7 @@ All services share access to:
 ### 1. Clone and Navigate
 
 ```bash
-git clone https://github.com/yourusername/ragdex.git
+git clone https://github.com/DigitalFence/ragdex.git
 cd ragdex
 ```
 
@@ -481,8 +481,8 @@ docker volume prune
 
 ## Getting Help
 
-- **Issues:** https://github.com/hpoliset/ragdex/issues
-- **Documentation:** https://github.com/hpoliset/ragdex#readme
+- **Issues:** https://github.com/DigitalFence/ragdex/issues
+- **Documentation:** https://github.com/DigitalFence/ragdex#readme
 - **Logs:** Check `data/logs/` for detailed error messages
 
 ## License
