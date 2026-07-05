@@ -129,8 +129,9 @@ docker-compose up -d ragdex-web
 # Only background indexer
 docker-compose up -d ragdex-index
 
-# Only MCP server
-docker-compose up -d ragdex-mcp
+# MCP server (stdio) — for standalone testing only; Claude Desktop launches
+# its own container via `docker run` (see "Integration with Claude Desktop")
+docker-compose --profile mcp run --rm ragdex-mcp
 ```
 
 ### Stop Services
@@ -171,7 +172,7 @@ docker-compose logs --tail=100 ragdex-index
 All data is stored externally on your host machine:
 
 ### Vector Database (ChromaDB)
-- **Location:** `./data/chroma_db/`
+- **Location:** `DB_PATH` (default `./data/chroma_db/`)
 - **Contents:**
   - `chroma.sqlite3` - Vector database
   - `book_index.json` - Document metadata
@@ -184,7 +185,7 @@ All data is stored externally on your host machine:
 - **Supported formats:** PDF, DOCX, PPTX, EPUB, MOBI, TXT, etc.
 
 ### Logs
-- **Location:** `./data/logs/`
+- **Location:** `LOGS_PATH` (default `./data/logs/`)
 - **Contents:**
   - `mcp_server_YYYYMMDD.log`
   - `indexing_YYYYMMDD.log`
@@ -203,57 +204,79 @@ tar -czf ragdex_logs_backup_$(date +%Y%m%d).tar.gz data/logs/
 
 ## Integration with Claude Desktop
 
-To use the Dockerized MCP server with Claude Desktop:
+The MCP protocol runs over **stdio**: Claude Desktop launches the server as a
+subprocess and talks to it through stdin/stdout. The robust way to do this with
+Docker is to have Claude Desktop launch a fresh container per session with
+`docker run -i --rm` — no long-running MCP container is required (and the
+`ragdex-mcp` compose service is intentionally *not* started by `docker compose
+up`; see docker-compose.yml).
 
-### Option 1: Docker Socket Mount (Advanced)
+### Prerequisites
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+1. **Build the image** once so the `ragdex:latest` tag exists:
+   ```bash
+   docker compose build
+   ```
+2. **Docker Desktop must be running** whenever you use the library in Claude
+   Desktop — the MCP server runs inside a container it launches on demand.
+
+### Configuration (recommended: `docker run`)
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`. Point the
+volume mounts at your real data — you can **reuse an existing local index** by
+mounting your current `chroma_db` (no re-indexing needed if the image and your
+prior install share the same `chromadb`/`langchain`/`sentence-transformers`
+versions):
 
 ```json
 {
   "mcpServers": {
-    "ragdex": {
+    "spiritual-library": {
       "command": "docker",
-      "args": ["exec", "-i", "ragdex-mcp", "ragdex-mcp"],
-      "env": {
-        "PYTHONUNBUFFERED": "1"
-      }
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "/absolute/path/to/documents:/data/documents:ro",
+        "-v", "/absolute/path/to/chroma_db:/data/chroma_db",
+        "-v", "/absolute/path/to/logs:/data/logs",
+        "-e", "PERSONAL_LIBRARY_DOC_PATH=/data/documents",
+        "-e", "PERSONAL_LIBRARY_DB_PATH=/data/chroma_db",
+        "-e", "PERSONAL_LIBRARY_LOGS_PATH=/data/logs",
+        "-e", "PYTHONUNBUFFERED=1",
+        "-e", "TOKENIZERS_PARALLELISM=false",
+        "ragdex:latest",
+        "ragdex-mcp"
+      ]
     }
   }
 }
 ```
 
-### Option 2: Stdio Bridge (Recommended)
+Notes:
+- `-i` keeps stdin open (required for stdio); `--rm` cleans up the container when
+  Claude Desktop closes the connection.
+- The document mount is read-only (`:ro`); the DB and logs mounts are read-write.
+- On macOS, Docker Desktop must have **file-sharing access** to the mounted host
+  paths (Settings → Resources → File Sharing). iCloud/CloudDocs paths are not
+  visible to containers — use a local folder.
+- Restart Claude Desktop after editing the config.
 
-Create a wrapper script `ragdex-docker-bridge.sh`:
+### Background indexer + web dashboard
+
+Run these as always-on services with the **same** data paths (via `.env`), so the
+indexer keeps the shared vector store up to date while Claude Desktop queries it:
 
 ```bash
-#!/bin/bash
-docker exec -i ragdex-mcp ragdex-mcp
+# .env sets DOCUMENTS_PATH, DB_PATH, LOGS_PATH to the same host paths used above
+docker compose up -d        # starts ragdex-index + ragdex-web
 ```
 
-Make it executable:
+### Standalone MCP for testing
+
+To exercise the MCP server manually without Claude Desktop:
+
 ```bash
-chmod +x ragdex-docker-bridge.sh
+docker compose --profile mcp run --rm ragdex-mcp
 ```
-
-Then configure Claude Desktop:
-```json
-{
-  "mcpServers": {
-    "ragdex": {
-      "command": "/path/to/ragdex-docker-bridge.sh",
-      "env": {
-        "PYTHONUNBUFFERED": "1"
-      }
-    }
-  }
-}
-```
-
-### Option 3: Network Bridge (Future)
-
-For network-based MCP protocol (when supported), you can expose the MCP server on a port.
 
 ## Troubleshooting
 

@@ -1,47 +1,41 @@
-version: '3.8'
+# Ragdex Docker stack.
+#
+# Data locations are configurable via .env (see .env.docker.template):
+#   DOCUMENTS_PATH  host path to your document library (mounted read-only)
+#   DB_PATH         host path to the ChromaDB vector store (read-write)
+#   LOGS_PATH       host path for logs (read-write)
+#   WEB_PORT        host port for the web dashboard (default 9999)
+#
+# `docker compose up -d` starts the always-on background services (indexer +
+# web dashboard). The MCP server is NOT started this way: Claude Desktop
+# launches it on demand over stdio with `docker run -i --rm ... ragdex-mcp`
+# (see DOCKER.md → "Integration with Claude Desktop"). It is still defined
+# below under the "mcp" profile for standalone/manual use.
+
+x-ragdex-common: &ragdex-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  # Stable tag so `docker run ... ragdex:latest` (Claude Desktop) uses the same
+  # image that `docker compose build` produces.
+  image: ragdex:latest
+  volumes:
+    - ${DB_PATH:-./data/chroma_db}:/data/chroma_db
+    - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
+    - ${LOGS_PATH:-./data/logs}:/data/logs
+  environment:
+    - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
+    - PERSONAL_LIBRARY_DOC_PATH=/data/documents
+    - PERSONAL_LIBRARY_LOGS_PATH=/data/logs
+    - CHROMA_TELEMETRY=false
+    - PYTHONUNBUFFERED=1
 
 services:
-  # MCP Server - for Claude Desktop integration
-  ragdex-mcp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ragdex-mcp
-    command: ragdex-mcp
-    volumes:
-      # External Vector DB
-      - ./data/chroma_db:/data/chroma_db
-      # External Document Library (change this to your documents path)
-      - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
-      # External Logs
-      - ./data/logs:/data/logs
-    environment:
-      - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
-      - PERSONAL_LIBRARY_DOC_PATH=/data/documents
-      - PERSONAL_LIBRARY_LOGS_PATH=/data/logs
-      - CHROMA_TELEMETRY=false
-      - PYTHONUNBUFFERED=1
-      # Email indexing (optional)
-      - PERSONAL_LIBRARY_INDEX_EMAILS=${INDEX_EMAILS:-false}
-      - PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=${EMAIL_MAX_AGE_DAYS:-365}
-    restart: unless-stopped
-    stdin_open: true
-    tty: true
-
   # Background Indexer - monitors and indexes documents
   ragdex-index:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *ragdex-common
     container_name: ragdex-index
     command: ragdex-index
-    volumes:
-      # External Vector DB
-      - ./data/chroma_db:/data/chroma_db
-      # External Document Library (change this to your documents path)
-      - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
-      # External Logs
-      - ./data/logs:/data/logs
     environment:
       - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
       - PERSONAL_LIBRARY_DOC_PATH=/data/documents
@@ -52,40 +46,26 @@ services:
       - PERSONAL_LIBRARY_INDEX_EMAILS=${INDEX_EMAILS:-false}
       - PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=${EMAIL_MAX_AGE_DAYS:-365}
     restart: unless-stopped
-    depends_on:
-      - ragdex-mcp
 
-  # Web Dashboard - monitoring interface at http://localhost:8888
+  # Web Dashboard - monitoring interface at http://localhost:${WEB_PORT:-9999}
   ragdex-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *ragdex-common
     container_name: ragdex-web
     command: ragdex-web
     ports:
       # Host port 9999 -> container 8888 (avoids clashing with a local
       # ragdex-web running on 8888). Override with WEB_PORT in .env.
       - "${WEB_PORT:-9999}:8888"
-    volumes:
-      # External Vector DB
-      - ./data/chroma_db:/data/chroma_db
-      # External Document Library (change this to your documents path)
-      - ${DOCUMENTS_PATH:-./data/documents}:/data/documents:ro
-      # External Logs
-      - ./data/logs:/data/logs
-    environment:
-      - PERSONAL_LIBRARY_DB_PATH=/data/chroma_db
-      - PERSONAL_LIBRARY_DOC_PATH=/data/documents
-      - PERSONAL_LIBRARY_LOGS_PATH=/data/logs
-      - CHROMA_TELEMETRY=false
-      - PYTHONUNBUFFERED=1
     restart: unless-stopped
-    depends_on:
-      - ragdex-mcp
 
-volumes:
-  # Named volumes (optional - can use bind mounts instead)
-  chroma_db:
-    driver: local
-  logs:
-    driver: local
+  # MCP Server - for Claude Desktop integration.
+  # Not started by `docker compose up` (it needs a stdio client). Claude Desktop
+  # launches it via `docker run -i --rm ... ragdex-mcp`. Kept here under the
+  # "mcp" profile for standalone testing: `docker compose --profile mcp run --rm ragdex-mcp`.
+  ragdex-mcp:
+    <<: *ragdex-common
+    container_name: ragdex-mcp
+    command: ragdex-mcp
+    profiles: ["mcp"]
+    stdin_open: true
+    tty: true
