@@ -39,8 +39,24 @@ WORKDIR /app
 # Copy application files
 COPY --chown=ragdex:ragdex . /app/
 
-# Install Python dependencies including optional doc-support (since LibreOffice is installed)
-RUN pip install --no-cache-dir -e ".[doc-support]"
+# Install Python dependencies.
+#
+# Two ARM/Apple-Silicon stability fixes are applied here (both crash the RAG
+# services with SIGILL / illegal instruction under Docker Desktop's ARM
+# virtualization otherwise):
+#
+#  1. CPU-only PyTorch. On linux/aarch64 the default torch wheel pulls CUDA
+#     libraries (cuda-toolkit, nvidia-cublas, cuda-bindings) that both bloat the
+#     image by ~2-3GB and SIGILL at import. The +cpu build avoids both.
+#     Installed first so `torch>=1.11.0` is already satisfied and the CUDA
+#     variant is never pulled in.
+#  2. cryptography < 43. v43+ (OpenSSL 3.x build) SIGILLs when its OpenSSL
+#     backend is imported (e.g. via pypdf). Constrained alongside the editable
+#     install so the resolver selects a working 42.x build directly.
+#
+# doc-support extras are included since LibreOffice is installed.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir -e ".[doc-support]" "cryptography<43"
 
 # Create directories for external mounts
 RUN mkdir -p /data/chroma_db /data/documents /data/logs && \
