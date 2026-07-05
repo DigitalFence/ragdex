@@ -243,6 +243,7 @@ versions):
         "-e", "PERSONAL_LIBRARY_LOGS_PATH=/data/logs",
         "-e", "PYTHONUNBUFFERED=1",
         "-e", "TOKENIZERS_PARALLELISM=false",
+        "-e", "MCP_WARMUP_ON_START=true",
         "ragdex:latest",
         "ragdex-mcp"
       ]
@@ -254,6 +255,10 @@ versions):
 Notes:
 - `-i` keeps stdin open (required for stdio); `--rm` cleans up the container when
   Claude Desktop closes the connection.
+- `MCP_WARMUP_ON_START=true` pre-loads the embedding model and vector store in
+  the background at launch so the first tool call doesn't return a "still
+  initializing" message. Omit it to save memory at the cost of a slower first
+  query.
 - The document mount is read-only (`:ro`); the DB and logs mounts are read-write.
 - On macOS, Docker Desktop must have **file-sharing access** to the mounted host
   paths (Settings → Resources → File Sharing). iCloud/CloudDocs paths are not
