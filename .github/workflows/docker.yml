@@ -45,17 +45,8 @@ jobs:
                       /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           df -h /
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: ragdex:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: docker build -t ragdex:ci .
 
       - name: MCP stdio smoke test (initialize + tools/list)
         run: |

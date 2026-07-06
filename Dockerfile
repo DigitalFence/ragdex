@@ -39,24 +39,27 @@ WORKDIR /app
 # Copy application files
 COPY --chown=ragdex:ragdex . /app/
 
-# Install Python dependencies.
+# Install Python dependencies (doc-support extras included since LibreOffice is
+# installed).
 #
-# Two ARM/Apple-Silicon stability fixes are applied here (both crash the RAG
-# services with SIGILL / illegal instruction under Docker Desktop's ARM
-# virtualization otherwise):
-#
-#  1. CPU-only PyTorch. On linux/aarch64 the default torch wheel pulls CUDA
-#     libraries (cuda-toolkit, nvidia-cublas, cuda-bindings) that both bloat the
-#     image by ~2-3GB and SIGILL at import. The +cpu build avoids both.
-#     Installed first so `torch>=1.11.0` is already satisfied and the CUDA
-#     variant is never pulled in.
-#  2. cryptography < 43. v43+ (OpenSSL 3.x build) SIGILLs when its OpenSSL
-#     backend is imported (e.g. via pypdf). Constrained alongside the editable
-#     install so the resolver selects a working 42.x build directly.
-#
-# doc-support extras are included since LibreOffice is installed.
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
- && pip install --no-cache-dir -e ".[doc-support]" "cryptography<43"
+# ARM-only stability workarounds: under Docker Desktop's ARM virtualization on
+# Apple Silicon, two native libraries execute illegal instructions (SIGILL) and
+# take down every service that loads the RAG stack:
+#   1. the default linux/aarch64 torch wheel pulls CUDA libs (cuda-toolkit,
+#      nvidia-cublas, cuda-bindings) that both bloat the image ~2-3GB and SIGILL
+#      at import  -> install CPU-only torch first so it satisfies torch>=1.11.0.
+#   2. cryptography 43+ (OpenSSL 3.x backend) SIGILLs on import (e.g. via pypdf)
+#      -> constrain to <43.
+# These do NOT occur on amd64, so that path uses the default wheels — which also
+# avoids a build-time dependency on download.pytorch.org (blocked on some CI
+# runners) and keeps the arm64 workarounds out of x86 images.
+RUN set -eux; \
+    if [ "$(dpkg --print-architecture)" = "arm64" ]; then \
+        pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
+        pip install --no-cache-dir -e ".[doc-support]" "cryptography<43"; \
+    else \
+        pip install --no-cache-dir -e ".[doc-support]"; \
+    fi
 
 # Create directories for external mounts
 RUN mkdir -p /data/chroma_db /data/documents /data/logs && \
