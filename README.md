@@ -175,6 +175,23 @@ sudo dnf install libreoffice
 
 **Note**: If you encounter `.doc` files without this optional setup, ragdex will provide a helpful error message with installation instructions.
 
+#### 🐳 Docker Installation (Alternative)
+
+Want to run Ragdex in containers? Perfect for:
+- Clean isolated environment
+- Easy deployment and updates
+- Cross-platform consistency
+
+```bash
+# Quick start with Docker
+docker-compose up -d
+
+# Access web dashboard
+open http://localhost:8888
+```
+
+**[→ Complete Docker setup guide](DOCKER.md)** - Includes external Vector DB, Document Library, and log configuration.
+
 ### Setup Services (2-3 minutes)
 
 ```bash
