@@ -17,6 +17,34 @@ All services share access to:
 
 **Docker Image:** Uses Python 3.11 with full document processing support (PDF, Office, E-books) and optional legacy .doc file handling.
 
+## Docker or native — pick one per index
+
+Docker is an **alternative** to the native install (see the README Quick Start),
+not a supplement. Both read/write the same kind of ChromaDB store, so:
+
+- Point Docker at a **fresh** `DB_PATH` for an independent index, **or** at an
+  existing `chroma_db` to reuse a native index (works when the image and your
+  native install share the same `chromadb`/`langchain`/`sentence-transformers`
+  versions).
+- **Do not run the native indexer and the Docker indexer against the same
+  `chroma_db` at the same time** — two writers on one store will contend. Run
+  only one indexer per database (stop/disable the other, or give each its own
+  `DB_PATH`).
+
+## Platform support
+
+The image is built `FROM python:3.11-slim` (Debian) and is architecture-agnostic:
+
+- **macOS (Apple Silicon)** via Docker Desktop — the reference setup. Note the
+  CPU-only PyTorch and `cryptography<43` pins in the Dockerfile, which avoid
+  SIGILL crashes under Docker Desktop's ARM virtualization.
+- **Linux (x86_64 and arm64)** — `docker compose build` produces a native image
+  for the host architecture. The same pins apply and are harmless there (CPU
+  PyTorch is the default for this CPU embedding workload; GPU users can adjust).
+
+On macOS, mounted host paths must be shared with Docker Desktop (Settings →
+Resources → File Sharing); iCloud/CloudDocs paths are not visible to containers.
+
 ## Prerequisites
 
 - Docker Engine 20.10+
