@@ -1,0 +1,107 @@
+name: Docker Image
+
+# Build the Docker image on Linux and smoke-test the MCP server over stdio.
+# The smoke test exercises the full server import path (torch, cryptography,
+# chromadb, sentence-transformers), so it also proves those native libraries
+# load on Linux x86_64 without crashing — the reference build is macOS/ARM.
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'src/**'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'src/**'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke-test:
+    name: Build image + MCP stdio smoke test (linux/amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up disk space
+        # The image bundles LibreOffice, Calibre, Tesseract and PyTorch, so the
+        # build needs more room than a fresh runner leaves on the root volume.
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ragdex:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: MCP stdio smoke test (initialize + tools/list)
+        run: |
+          set -euo pipefail
+          mkdir -p data/documents data/chroma_db data/logs
+          {
+            printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}}}'
+            printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}'
+            printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+            sleep 8
+          } | timeout 180 docker run -i --rm \
+                -v "$PWD/data/documents:/data/documents:ro" \
+                -v "$PWD/data/chroma_db:/data/chroma_db" \
+                -v "$PWD/data/logs:/data/logs" \
+                -e PERSONAL_LIBRARY_DOC_PATH=/data/documents \
+                -e PERSONAL_LIBRARY_DB_PATH=/data/chroma_db \
+                -e PERSONAL_LIBRARY_LOGS_PATH=/data/logs \
+                -e PYTHONUNBUFFERED=1 \
+                -e TOKENIZERS_PARALLELISM=false \
+                ragdex:ci ragdex-mcp > mcp_out.jsonl 2> mcp_err.log || true
+
+          echo "===== MCP stdout ====="; cat mcp_out.jsonl
+          python3 - <<'PY'
+          import json, sys
+          init = False
+          tools = None
+          for line in open("mcp_out.jsonl"):
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  m = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              if m.get("id") == 1 and "result" in m:
+                  init = True
+              if m.get("id") == 2 and "result" in m:
+                  tools = [t["name"] for t in m["result"].get("tools", [])]
+          if not init:
+              print("FAIL: no initialize response"); sys.exit(1)
+          if not tools or "search" not in tools:
+              print(f"FAIL: tools/list missing expected tools: {tools}"); sys.exit(1)
+          print(f"OK: initialize responded and tools/list returned {len(tools)} tools (incl. 'search')")
+          PY
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          echo "===== MCP stderr ====="; cat mcp_err.log 2>/dev/null || true
