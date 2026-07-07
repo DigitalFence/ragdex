@@ -177,20 +177,33 @@ sudo dnf install libreoffice
 
 #### 🐳 Docker Installation (Alternative)
 
-Want to run Ragdex in containers? Perfect for:
-- Clean isolated environment
-- Easy deployment and updates
-- Cross-platform consistency
+**Perfect for:** Containerized deployment, Windows users, or those wanting easy cross-platform setup.
 
+**Features:**
+- 🔒 Clean isolated environment
+- 🚀 Easy deployment and updates
+- 🌐 Works on **macOS, Linux, and Windows**
+- 💾 External Vector DB, Document Library, and logs
+- 🎯 Three services: MCP server, indexer, web dashboard
+
+**Quick Start** (5 minutes):
 ```bash
-# Quick start with Docker
+# 1. Clone and configure
+git clone https://github.com/hpoliset/ragdex.git
+cd ragdex
+cp .env.docker.template .env
+# Edit .env and set DOCUMENTS_PATH=/path/to/your/documents
+
+# 2. Start services
 docker-compose up -d
 
-# Access web dashboard
+# 3. Access web dashboard
 open http://localhost:8888
 ```
 
-**[→ Complete Docker setup guide](DOCKER.md)** - Includes external Vector DB, Document Library, and log configuration.
+**Requirements:** Docker Engine 20.10+, Docker Compose 2.0+, 8GB RAM
+
+**[→ Complete Docker setup guide](DOCKER.md)** - Includes Claude Desktop integration, migration guide, troubleshooting, and advanced configurations.
 
 ### Setup Services (2-3 minutes)
 

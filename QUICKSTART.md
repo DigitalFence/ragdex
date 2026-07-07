@@ -8,6 +8,7 @@ Use this checklist to verify you're ready to install Ragdex. Don't worry if you 
 
 ### Quick Checklist
 
+**For Native Installation:**
 - [ ] My computer runs **macOS 10.15+ or Linux** (Ubuntu 20.04+, Debian 11+, Fedora 35+)
 - [ ] I have **admin/sudo access** on this machine
 - [ ] I can **open and use Terminal**
@@ -17,6 +18,14 @@ Use this checklist to verify you're ready to install Ragdex. Don't worry if you 
 - [ ] **Claude Desktop** is installed and launched at least once
 - [ ] **(macOS only)** Terminal has **Full Disk Access** permission
 - [ ] **(macOS only)** Xcode Command Line Tools installed
+
+**For Docker Installation (Alternative):**
+- [ ] My computer runs **macOS, Linux, or Windows** with Docker Desktop
+- [ ] **Docker Engine 20.10+** and **Docker Compose 2.0+** installed
+- [ ] I have **8GB RAM** available for Docker
+- [ ] I have **5GB+ free disk space**
+- [ ] I have **stable internet** (10+ Mbps recommended)
+- [ ] I have **10-15 minutes** available for setup
 
 ---
 
@@ -36,6 +45,8 @@ Use this checklist to verify you're ready to install Ragdex. Don't worry if you 
 **NOT Supported:**
 - Windows (native) - may work with WSL2 but untested
 - macOS 10.14 or older
+
+> **🐳 Docker Alternative**: If you prefer containerized deployment or want cross-platform consistency, you can use Docker instead. See the [Docker installation section](#using-docker--alternative---isolated-environment) below. Docker works on **macOS, Linux, and Windows** with Docker Desktop.
 
 ### CPU Architecture
 
@@ -1202,6 +1213,110 @@ Successfully installed ragdex-0.2.x chromadb-... langchain-...
 **💡 Recommendation**: For future projects, consider installing uv for faster package management.
 
 </details>
+
+---
+
+### Using Docker (🐳 Alternative - Isolated Environment)
+
+**Perfect for:** Users who want containerized deployment, clean isolation, or easy cross-platform setup.
+
+> **📘 Full Docker Guide**: For complete documentation, Claude Desktop integration, and advanced configurations, see **[DOCKER.md](DOCKER.md)**
+
+#### Prerequisites for Docker
+
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- 8GB RAM available for Docker
+- 5GB disk space
+
+#### Quick Docker Setup (5 minutes)
+
+1. **Clone the repository** (if not already done):
+```bash
+git clone https://github.com/hpoliset/ragdex.git
+cd ragdex
+```
+
+2. **Configure your environment**:
+```bash
+cp .env.docker.template .env
+```
+
+Edit `.env` and set your documents path:
+```bash
+# Linux/macOS example
+DOCUMENTS_PATH=/home/yourusername/Documents
+
+# Windows example (use forward slashes)
+DOCUMENTS_PATH=C:/Users/yourusername/Documents
+```
+
+3. **Create data directories**:
+```bash
+mkdir -p data/chroma_db data/logs
+```
+
+4. **Start all services**:
+```bash
+docker-compose up -d
+```
+
+**Expected output:**
+```
+Creating ragdex-mcp   ... done
+Creating ragdex-index ... done
+Creating ragdex-web   ... done
+```
+
+5. **Access the web dashboard**:
+```bash
+# Open in browser
+open http://localhost:8888
+```
+
+#### What Docker Gives You
+
+- **ragdex-mcp**: MCP server (for Claude Desktop integration)
+- **ragdex-index**: Background document indexer
+- **ragdex-web**: Web monitoring dashboard
+
+**External Data (persists on your host machine):**
+- Vector DB: `./data/chroma_db/`
+- Documents: Your configured path (read-only)
+- Logs: `./data/logs/`
+
+#### Docker Management Commands
+
+```bash
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+
+# Restart services
+docker-compose restart
+
+# Check status
+docker-compose ps
+```
+
+#### Migrating to v0.3.6+ (if upgrading)
+
+If you're upgrading from an older version:
+
+```bash
+# Stop services
+docker-compose down
+
+# Run migration
+docker-compose run --rm ragdex-mcp python scripts/migrate_metadata_v036.py --backup
+
+# Restart
+docker-compose up -d
+```
+
+✅ **Docker installation complete!** For Claude Desktop integration, see [DOCKER.md](DOCKER.md#integration-with-claude-desktop).
 
 ---
 
