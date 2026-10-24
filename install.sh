@@ -26,6 +26,20 @@ else
     USE_CENTRALIZED_CONFIG=false
 fi
 
+# Apple Silicon helpers (native arm64 tooling, no Rosetta)
+source "$SCRIPT_DIR/scripts/lib/macos_arch.sh"
+
+# An installer translated by Rosetta would pick Intel tools - restart natively
+if is_apple_silicon && is_running_under_rosetta; then
+    echo "Restarting installer natively (arm64) instead of under Rosetta..."
+    exec arch -arm64 /bin/bash "$0" "$@"
+fi
+BREW_CMD=$(find_native_brew || true)
+if is_apple_silicon && [ -z "$BREW_CMD" ] && command -v brew &> /dev/null; then
+    echo "⚠️  Only an Intel Homebrew ($(command -v brew)) was found; it installs Rosetta-only tools."
+    echo "   Install native Homebrew in /opt/homebrew from https://brew.sh for automatic installs."
+fi
+
 # Parse command line arguments
 AUTO_MODE=false
 AUTO_BOOKS_PATH=""
@@ -179,14 +193,23 @@ python_version=""
 # Helper function to test if a Python installation is usable
 test_python() {
     local py_path="$1"
+    # On Apple Silicon an Intel Python only runs under Rosetta and has no GPU (MPS) access
+    if ! is_native_executable "$py_path"; then
+        echo "  ⚠️  Skipping Intel (x86_64) Python at $py_path - needs Rosetta" >&2
+        return 1
+    fi
     # Test if it can create a venv without errors (check for broken uv installations)
-    if "$py_path" -c "import sys; sys.exit(0 if sys.base_prefix != '/install' else 1)" 2>/dev/null; then
-        return 0
-    else
+    if ! "$py_path" -c "import sys; sys.exit(0 if sys.base_prefix != '/install' else 1)" 2>/dev/null; then
         # Log when filtering out broken installations
         echo "  ⚠️  Skipping broken Python installation at $py_path (appears to be uv-managed)" >&2
         return 1
     fi
+    # A universal Python launched under Rosetta would still run as x86_64
+    if ! is_native_python "$py_path"; then
+        echo "  ⚠️  Skipping Python at $py_path - not running as arm64" >&2
+        return 1
+    fi
+    return 0
 }
 
 # Detect all available Python 3.9-3.13 installations
@@ -304,7 +327,7 @@ if [ -z "$python_cmd" ]; then
     echo -e "  ${RED}✗${NC} Python 3.9-3.13 is required but not found"
     echo ""
 
-    if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &> /dev/null; then
+    if [[ "$OSTYPE" == "darwin"* ]] && [ -n "$BREW_CMD" ]; then
         echo -e "${CYAN}Python 3.9-3.13 is required (3.13 recommended)${NC}"
 
         # In auto mode, install automatically; otherwise ask
@@ -319,14 +342,15 @@ if [ -z "$python_cmd" ]; then
 
         if [ "$install_python" = true ]; then
             echo "  Installing Python 3.13..."
-            brew install python@3.13 >/dev/null 2>&1
+            "$BREW_CMD" install python@3.13 >/dev/null 2>&1
 
             # Verify installation
-            if [ -x "/opt/homebrew/opt/python@3.13/bin/python3.13" ]; then
-                python_cmd="/opt/homebrew/opt/python@3.13/bin/python3.13"
+            brew_python="$("$BREW_CMD" --prefix)/opt/python@3.13/bin/python3.13"
+            if [ -x "$brew_python" ]; then
+                python_cmd="$brew_python"
                 python_version=$("$python_cmd" --version 2>&1 | cut -d' ' -f2)
                 echo -e "  ${GREEN}✓${NC} Python 3.13 installed successfully: $python_version"
-            elif command -v python3.13 &> /dev/null; then
+            elif command -v python3.13 &> /dev/null && is_native_python python3.13; then
                 python_cmd="python3.13"
                 python_version=$(python3.13 --version 2>&1 | cut -d' ' -f2)
                 echo -e "  ${GREEN}✓${NC} Python 3.13 installed successfully: $python_version"
@@ -343,6 +367,10 @@ if [ -z "$python_cmd" ]; then
     else
         echo "  Please install Python 3.9-3.13 and try again"
         echo "  Recommended: Python 3.13"
+        if is_apple_silicon; then
+            echo "  On Apple Silicon, install native Homebrew (in /opt/homebrew) from https://brew.sh,"
+            echo "  then run: /opt/homebrew/bin/brew install python@3.13"
+        fi
         exit 1
     fi
 fi
@@ -353,6 +381,18 @@ echo -e "${BLUE}📌 Setting up Python environment...${NC}"
 echo ""
 
 venv_path="${PROJECT_ROOT}/venv_mcp"
+
+if [ -d "$venv_path" ] && ! is_native_venv "$venv_path"; then
+    # An Intel venv (e.g. migrated from an Intel Mac) needs Rosetta and can't use the GPU
+    intel_backup="${venv_path}.intel.bak.$(date +%Y%m%d_%H%M%S)"
+    echo -e "  ${YELLOW}!${NC} Existing venv_mcp/ is not native arm64 (needs Rosetta)"
+    if prompt_yes_no "  Move it to $(basename "$intel_backup") and create a native one?" "y"; then
+        mv "$venv_path" "$intel_backup"
+    else
+        echo -e "  ${RED}✗${NC} A native arm64 virtual environment is required on Apple Silicon"
+        exit 1
+    fi
+fi
 
 if [ -d "$venv_path" ]; then
     echo -e "  ${GREEN}✓${NC} Virtual environment found at: venv_mcp/"
@@ -455,7 +495,7 @@ else
     echo -e "${CYAN}Without Calibre:${NC} MOBI files will use built-in library (lower quality)"
     echo ""
 
-    if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &> /dev/null; then
+    if [[ "$OSTYPE" == "darwin"* ]] && [ -n "$BREW_CMD" ]; then
         if [ "$AUTO_MODE" = true ]; then
             echo "  Auto mode: Skipping Calibre installation (optional)"
             install_calibre=false
@@ -468,19 +508,19 @@ else
         if [ "$install_calibre" = true ]; then
             echo "  Installing Calibre via Homebrew..."
             echo "  (This may take a few minutes...)"
-            brew install calibre
+            "$BREW_CMD" install --cask calibre
 
-            if command -v ebook-convert &> /dev/null; then
+            if command -v ebook-convert &> /dev/null || [ -x /Applications/calibre.app/Contents/MacOS/ebook-convert ]; then
                 echo -e "  ${GREEN}✓${NC} Calibre installed successfully"
             else
                 echo -e "  ${YELLOW}⚠️${NC} Calibre installation may have failed"
-                echo "     You can install it later with: brew install calibre"
+                echo "     You can install it later with: brew install --cask calibre"
             fi
         else
             echo -e "  ${CYAN}ℹ${NC}  Skipping Calibre installation (you can install it later)"
         fi
     else
-        echo -e "  ${CYAN}ℹ${NC}  To install Calibre later, run: brew install calibre"
+        echo -e "  ${CYAN}ℹ${NC}  To install Calibre later, run: brew install --cask calibre"
     fi
 fi
 

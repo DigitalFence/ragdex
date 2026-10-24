@@ -426,6 +426,26 @@ If you use iTerm2, Warp, or another terminal emulator, grant Full Disk Access to
 
 These tools are **only needed for specific document formats**. Install them only if you have these file types.
 
+| Format | Python packages | System tool | Without the tool |
+|---|---|---|---|
+| `.pdf` | included | — | works |
+| `.docx`, `.pptx` | included (`unstructured`) | — | works |
+| `.epub` | included (`unstructured`) | **Pandoc** | EPUBs fail to index |
+| `.mobi`, `.azw`, `.azw3` | included | **Calibre** | lower-quality fallback, often no text |
+| `.doc`, `.ppt` (legacy Office) | included | **LibreOffice** | files fail to index |
+| Scanned PDFs | included | **ocrmypdf + Tesseract** | no extractable text |
+
+One command for everything on macOS:
+
+```bash
+brew install pandoc ocrmypdf tesseract tesseract-lang
+brew install --cask calibre libreoffice
+```
+
+> **🍎 Apple Silicon:** run these with the native Homebrew (`/opt/homebrew/bin/brew`). Tools installed by an old Intel Homebrew in `/usr/local` (common after migrating from an Intel Mac) only run under Rosetta; without it they fail with `bad CPU type in executable`, and the affected files land in the failed list. Check a tool with `file -L "$(command -v soffice)"`; it should say `arm64` (or `universal`).
+
+> **Already have failed files?** After installing a missing tool, the files that failed for lack of it are not retried automatically. Clear them from the failed list with `./scripts/manage_failed_docs.sh remove <path>` (one file) or `./scripts/manage_failed_docs.sh retry` (all), then restart the indexer (`launchctl kickstart -k gui/$(id -u)/com.personal-library.index-monitor`) so it rescans the library.
+
 ### For E-books (MOBI, AZW, AZW3)
 
 #### Calibre
@@ -508,7 +528,8 @@ LibreOffice 7.x.x.x
 # macOS
 brew install ocrmypdf tesseract
 
-# For non-English documents, install language packs
+# For non-English documents, install language packs and set the languages,
+# e.g. PERSONAL_LIBRARY_OCR_LANGUAGES=eng+hin+san in the indexer environment
 brew install tesseract-lang
 
 # Linux (Ubuntu/Debian) — untested

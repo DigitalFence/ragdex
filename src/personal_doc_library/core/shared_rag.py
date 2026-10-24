@@ -10,6 +10,7 @@ import logging
 import torch
 import hashlib
 import json
+import re
 import time
 import subprocess
 import shutil
@@ -44,8 +45,10 @@ from langchain_community.vectorstores import Chroma
 # Project imports
 from .config import config
 
-# Optional import for .doc/.docx support
+# Optional import for .doc/.docx support. The langchain wrapper imports even
+# without `unstructured` and only fails at load time, so check the package itself.
 try:
+    import unstructured  # noqa: F401
     from langchain_community.document_loaders import UnstructuredWordDocumentLoader
     WORD_LOADER_AVAILABLE = True
 except ImportError:
@@ -303,10 +306,17 @@ class OCRPDFLoader:
             if not os.path.exists(input_file):
                 raise ValueError(f"Input file does not exist: {input_file}")
                 
-            logger.info(f"Performing OCR on {os.path.basename(input_file)}...")
-            
+            # Tesseract languages, e.g. "eng+hin+san" (needs the tesseract-lang pack)
+            languages = os.environ.get('PERSONAL_LIBRARY_OCR_LANGUAGES', 'eng')
+            if not re.fullmatch(r'[A-Za-z_]+(\+[A-Za-z_]+)*', languages):
+                logger.warning(f"Invalid PERSONAL_LIBRARY_OCR_LANGUAGES '{languages}', using 'eng'")
+                languages = 'eng'
+
+            logger.info(f"Performing OCR on {os.path.basename(input_file)} (languages: {languages})...")
+
             cmd = [
                 'ocrmypdf',
+                '-l', languages,
                 '--skip-text',     # Skip pages that already have text
                 '--optimize', '1', # Optimize output size
                 '--output-type', 'pdf',  # Regular PDF output to avoid color space issues
@@ -1046,10 +1056,13 @@ class SharedRAG:
                 continue
                 
             for file in files:
+                # Skip Office lock files (~$name.docx) and macOS AppleDouble files (._name.pdf)
+                if file.startswith(('~$', '._')):
+                    continue
                 if file.lower().endswith(supported_extensions):
                     filepath = os.path.join(root, file)
                     rel_path = os.path.relpath(filepath, self.books_directory)
-                    
+
                     # Skip files that are already marked as failed
                     if self.is_document_failed(rel_path):
                         logger.debug(f"Skipping failed document: {rel_path}")
@@ -1646,6 +1659,12 @@ class SharedRAG:
     
     def handle_failed_document(self, filepath, error_msg):
         """Handle a document that failed to index by attempting to clean it (PDFs only)"""
+        # A cleaned temp copy failing is recorded by handle_failed_pdf against the
+        # original; recording it here would add a bogus '../tmp_cleaned_pdfs' entry
+        tmp_dir = os.path.join(self.db_directory, "tmp_cleaned_pdfs")
+        if os.path.abspath(filepath).startswith(os.path.abspath(tmp_dir) + os.sep):
+            return False
+
         # Use full path as key to avoid collisions
         # This fixes the issue where only basename was used, causing failures to overwrite each other
         rel_path = os.path.relpath(filepath, self.books_directory) if hasattr(self, 'books_directory') else filepath
@@ -1731,7 +1750,7 @@ class SharedRAG:
         # Paths
         name_stem, name_ext = os.path.splitext(pdf_name)
         temp_cleaned = os.path.join(tmp_dir, name_stem + "_cleaned" + name_ext)
-        
+
         # Try to clean
         if PDFCleaner.clean_pdf(filepath, temp_cleaned):
             try:
@@ -1767,17 +1786,17 @@ class SharedRAG:
                     current_docs.update(failed_pdfs)
                     return current_docs
                 self._update_failed_list_with_lock(update_cleaned)
-                
-                # Clean up the temp file
-                try:
-                    os.remove(temp_cleaned)
-                except:
-                    pass
-                
+
                 return result
-                
+
             except Exception as e:
                 logger.error(f"Error during cleaning process: {e}")
+            finally:
+                # Always remove the temp file, even if indexing raised
+                try:
+                    os.remove(temp_cleaned)
+                except OSError:
+                    pass
         else:
             # Record failure
             failed_pdfs[rel_path] = {
@@ -2290,14 +2309,17 @@ class SharedRAG:
 
         try:
             if self.vectorstore:
-                # Fetch all documents at once and count categories
-                # This is faster than 4 separate filtered queries
-                all_docs = self.vectorstore.get()
-                if all_docs and 'metadatas' in all_docs:
-                    for metadata in all_docs['metadatas']:
-                        if 'type' in metadata:
-                            cat_type = metadata['type']
-                            counts[cat_type] = counts.get(cat_type, 0) + 1
+                # Count the smaller categories with id-only filtered queries and
+                # derive 'general' (the default category) as the remainder.
+                # Fetching all metadata exhausts memory and takes minutes on
+                # large libraries (600k+ chunks).
+                collection = self.vectorstore._collection
+                total = collection.count()
+                for cat_type in ('practice', 'energy_work', 'philosophy'):
+                    ids = collection.get(where={"type": cat_type}, include=[])['ids']
+                    if ids:
+                        counts[cat_type] = len(ids)
+                counts['general'] = max(total - sum(counts.values()), 0)
         except Exception as e:
             logger.debug(f"Error getting category counts: {e}")
 

@@ -20,7 +20,9 @@ All services share access to:
 ## Docker or native — pick one per index
 
 Docker is an **alternative** to the native install (see the README Quick Start),
-not a supplement. Both read/write the same kind of ChromaDB store, so:
+not a supplement. On a Mac the native install is recommended — see
+[Performance on macOS](#performance-on-macos-no-gpu). Both read/write the same
+kind of ChromaDB store, so:
 
 - Point Docker at a **fresh** `DB_PATH` for an independent index, **or** at an
   existing `chroma_db` to reuse a native index (works when the image and your
@@ -35,9 +37,10 @@ not a supplement. Both read/write the same kind of ChromaDB store, so:
 
 The image is built `FROM python:3.11-slim` (Debian) and is architecture-agnostic:
 
-- **macOS (Apple Silicon)** via Docker Desktop — the reference setup. Note the
-  CPU-only PyTorch and `cryptography<43` pins in the Dockerfile, which avoid
-  SIGILL crashes under Docker Desktop's ARM virtualization.
+- **macOS (Apple Silicon)** via Docker Desktop — supported, but slower than
+  native (no GPU; see below). Note the CPU-only PyTorch and `cryptography<43`
+  pins in the Dockerfile, which avoid SIGILL crashes under Docker Desktop's ARM
+  virtualization.
 - **Linux (x86_64 and arm64)** — `docker compose build` produces a native image
   for the host architecture. The same pins apply and are harmless there (CPU
   PyTorch is the default for this CPU embedding workload; GPU users can adjust).
@@ -45,11 +48,47 @@ The image is built `FROM python:3.11-slim` (Debian) and is architecture-agnostic
 On macOS, mounted host paths must be shared with Docker Desktop (Settings →
 Resources → File Sharing); iCloud/CloudDocs paths are not visible to containers.
 
+## Performance on macOS (no GPU)
+
+Docker on macOS runs containers inside a Linux VM, and that VM has **no access
+to the Apple GPU** (Metal/MPS). The image therefore ships CPU-only PyTorch, and
+all embedding runs on the CPU. Apple's own `container` tool has the same
+limitation (it also runs a Linux VM per container). Running natively, ragdex
+detects MPS and embeds on the GPU automatically.
+
+Measured on an Apple Silicon Mac with the default `all-mpnet-base-v2` model:
+
+| Mode | Embedding throughput |
+|---|---|
+| Docker indexer (all 16 CPU cores busy) | ~11 chunks/s |
+| Native, Apple GPU (MPS) | ~55 chunks/s |
+
+The native MCP server also starts faster: each Docker container begins with an
+empty model cache, so every Claude Desktop connection re-downloads the
+embedding model.
+
+**Use Docker on a Mac** when isolation matters more than speed. **Use the
+native install** (README Quick Start) for the best performance; it needs no
+Rosetta on Apple Silicon. On Linux servers Docker performs like a native CPU
+install.
+
+### Memory and restarts on Docker Desktop
+
+- **Memory:** the MCP server, indexer and dashboard share Docker Desktop's VM
+  memory, and each process that opens a large ChromaDB store needs several GB.
+  With a ~600k-chunk library, an 8 GB VM ran out of memory and the kernel killed
+  the indexer and MCP server. For large libraries raise Settings → Resources →
+  Memory Limit to 16 GB or more.
+- **Restarts:** quitting Docker Desktop counts as stopping the containers, so
+  `restart: unless-stopped` would leave them down after the next launch. The
+  compose file uses `restart: always`. Also enable Settings → General →
+  "Start Docker Desktop when you sign in" so they come back after a reboot.
+
 ## Prerequisites
 
 - Docker Engine 20.10+
 - Docker Compose 2.0+
-- At least 8GB RAM available for Docker
+- At least 8GB RAM available for Docker (16GB+ for large libraries)
 - ~5GB disk space for images and models
 
 ## Quick Start

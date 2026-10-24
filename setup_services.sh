@@ -99,6 +99,25 @@ else
     fi
 fi
 
+# Apple Silicon: services must run on a native arm64 Python (no Rosetta, GPU available)
+ARCH_LIB="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/scripts/lib/macos_arch.sh"
+if [ -f "$ARCH_LIB" ]; then
+    source "$ARCH_LIB"
+    BREW_CMD=$(find_native_brew || true)
+    ragdex_python=$(script_interpreter "$RAGDEX_MCP_PATH")
+    if [[ "$(basename "${ragdex_python:-none}")" == python* ]] && ! is_native_python "$ragdex_python"; then
+        echo -e "${RED}✗${NC} Ragdex is installed on an Intel (x86_64) Python: $ragdex_python"
+        echo "This needs Rosetta and cannot use the GPU. Reinstall with a native Python:"
+        echo "  /opt/homebrew/bin/brew install uv"
+        echo "  uv venv --python /opt/homebrew/bin/python3.13 ~/ragdex_env"
+        echo "  uv pip install --python ~/ragdex_env/bin/python ragdex"
+        exit 1
+    fi
+else
+    # Standalone copy of this script - fall back to whatever brew is on PATH
+    BREW_CMD=$(command -v brew || true)
+fi
+
 # Configure paths - Priority: CLI args > env vars > interactive prompts > defaults
 echo ""
 echo "${BLUE}📁 Configuring paths...${NC}"
@@ -204,30 +223,30 @@ else
     echo -e "${BLUE}Without Calibre:${NC} MOBI files will use built-in library (lower quality)"
     echo ""
 
-    if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &> /dev/null; then
+    if [[ "$OSTYPE" == "darwin"* ]] && [ -n "$BREW_CMD" ]; then
         if [ "$NON_INTERACTIVE" = false ]; then
             read -p "Install Calibre for enhanced ebook support? (y/N): " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 echo "Installing Calibre via Homebrew..."
                 echo "(This may take a few minutes...)"
-                brew install calibre
+                "$BREW_CMD" install --cask calibre
 
-                if command -v ebook-convert &> /dev/null; then
+                if command -v ebook-convert &> /dev/null || [ -x /Applications/calibre.app/Contents/MacOS/ebook-convert ]; then
                     echo -e "${GREEN}✓${NC} Calibre installed successfully"
                 else
                     echo -e "${YELLOW}⚠️${NC} Calibre installation may have failed"
-                    echo "   You can install it later with: brew install calibre"
+                    echo "   You can install it later with: brew install --cask calibre"
                 fi
             else
                 echo -e "${BLUE}ℹ${NC}  Skipping Calibre installation (you can install it later)"
             fi
         else
             echo -e "${BLUE}ℹ${NC}  Non-interactive mode: Skipping optional Calibre installation"
-            echo "   To install later, run: brew install calibre"
+            echo "   To install later, run: brew install --cask calibre"
         fi
     else
-        echo -e "${BLUE}ℹ${NC}  To install Calibre later, run: brew install calibre"
+        echo -e "${BLUE}ℹ${NC}  To install Calibre later, run: brew install --cask calibre"
     fi
 fi
 
