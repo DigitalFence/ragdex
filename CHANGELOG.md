@@ -2,6 +2,22 @@
 
 All notable changes to the Spiritual Library MCP Server will be documented in this file.
 
+## [0.5.0] - 2026-10-24 - Native Apple Silicon (No Rosetta) and Indexing Fixes
+
+### Added
+- **Apple Silicon without Rosetta**: New `scripts/lib/macos_arch.sh` helpers. `install.sh` re-launches natively if started under Rosetta, skips Intel (x86_64) Pythons, offers to rebuild an Intel `venv_mcp`, and only uses the native `/opt/homebrew` Homebrew. `setup_services.sh` and the indexer service refuse Intel environments with clear instructions.
+- **OCR languages**: `PERSONAL_LIBRARY_OCR_LANGUAGES` (default `eng`, e.g. `eng+hin+san` with `tesseract-lang`).
+
+### Fixed
+- **`library_stats` hang / out-of-memory**: Category counts no longer load every chunk; they use id-only filtered queries (seconds instead of minutes, no multi-GB spike on 600k-chunk libraries).
+- **`.docx`, `.pptx`, `.epub` failing with "unstructured package not found"**: `unstructured[docx,pptx,epub]` is now a core dependency, and its absence is detected correctly so the `.docx` fallback works.
+- **Junk failures**: Office lock files (`~$…`) and macOS AppleDouble files (`._…`) are skipped; failures of cleaned temp copies are no longer recorded separately, and temp copies are always removed.
+- **Service document count always 0**: The indexer service now uses a `timeout` command that actually runs.
+
+### Changed
+- **Docker is an alternative deployment mode**: Docs recommend native installs; Docker on macOS has no GPU (MPS) access, so indexing is ~5x slower. Added memory guidance, and `docker-compose.yml` now uses `restart: always`.
+- **Dependency docs**: QUICKSTART lists which system tool each format needs (Pandoc, Calibre, LibreOffice, ocrmypdf/Tesseract) with a one-line macOS install.
+
 ## [0.3.8] - 2026-02-24 - Indexer Stability and Web Retry Fixes
 
 ### Fixed
