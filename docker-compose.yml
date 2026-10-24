@@ -45,7 +45,7 @@ services:
       # Email indexing (optional)
       - PERSONAL_LIBRARY_INDEX_EMAILS=${INDEX_EMAILS:-false}
       - PERSONAL_LIBRARY_EMAIL_MAX_AGE_DAYS=${EMAIL_MAX_AGE_DAYS:-365}
-    restart: unless-stopped
+    restart: always
 
   # Web Dashboard - monitoring interface at http://localhost:${WEB_PORT:-9999}
   ragdex-web:
@@ -56,7 +56,7 @@ services:
       # Host port 9999 -> container 8888 (avoids clashing with a local
       # ragdex-web running on 8888). Override with WEB_PORT in .env.
       - "${WEB_PORT:-9999}:8888"
-    restart: unless-stopped
+    restart: always
 
   # MCP Server - for Claude Desktop integration.
   # Not started by `docker compose up` (it needs a stdio client). Claude Desktop

@@ -119,7 +119,8 @@ When enabled, Ragdex intelligently filters out noise from your email archives:
 - **Admin Access**: Required for installation - [Details →](QUICKSTART.md#1-adminsudo-access)
 
 **Optional Tools** (format-specific):
-- Calibre (MOBI/AZW ebooks), LibreOffice (.doc files), ocrmypdf + Tesseract (scanned PDFs), Ghostscript (corrupted PDFs)
+- Pandoc (EPUB), Calibre (MOBI/AZW ebooks), LibreOffice (legacy .doc/.ppt), ocrmypdf + Tesseract (scanned PDFs), Ghostscript (corrupted PDFs)
+- macOS: `brew install pandoc ocrmypdf tesseract tesseract-lang ghostscript && brew install --cask calibre libreoffice`
 - [See all optional dependencies →](QUICKSTART.md#-optional-dependencies-format-specific)
 
 **Run Prerequisites Check Script**: [Verification script →](QUICKSTART.md#-prerequisites-verification-script)
@@ -150,6 +151,16 @@ pip install ragdex
 
 **Supported Python versions:** 3.9, 3.10, 3.11, 3.12, 3.13
 
+**🍎 Apple Silicon (M1/M2/M3/M4…):** Ragdex runs natively on arm64 and does **not** need Rosetta. Use a native Python and tools from Homebrew in `/opt/homebrew` (not an old Intel Homebrew in `/usr/local`), and embeddings automatically run on the Apple GPU (MPS):
+
+```bash
+/opt/homebrew/bin/brew install python@3.13 uv
+uv venv --python /opt/homebrew/bin/python3.13 ~/ragdex_env
+uv pip install --python ~/ragdex_env/bin/python ragdex
+```
+
+The installers (`install.sh`, `setup_services.sh`) skip Intel (x86_64) Pythons, offer to rebuild an Intel `venv_mcp` natively, and use the native Homebrew for optional tools.
+
 **Note**: First run downloads ~2GB of AI models (5-10 min). [Details](QUICKSTART.md#-first-run-model-download)
 
 **Don't have uv?** Install it: `curl -LsSf https://astral.sh/uv/install.sh | sh` (then close/reopen Terminal)
@@ -177,7 +188,9 @@ sudo dnf install libreoffice
 
 #### 🐳 Docker Installation (Alternative)
 
-**Perfect for:** Containerized deployment, Windows users, or those wanting easy cross-platform setup.
+The native install above is the recommended deployment. Docker is an alternative mode — **perfect for:** containerized deployment, Windows users, or those wanting easy cross-platform setup.
+
+> **⚠️ On a Mac, Docker is noticeably slower than running natively.** Docker on macOS runs containers in a Linux VM that has no access to the Apple GPU (Metal/MPS), so embedding runs on the CPU only. On an Apple Silicon Mac, native indexing measured roughly **5× faster** (~55 vs ~11 chunks/s), and the MCP server starts faster too. Choose one mode per library: don't run the Docker and native services at the same time.
 
 **Features:**
 - 🔒 Clean isolated environment
@@ -198,7 +211,7 @@ cp .env.docker.template .env
 docker-compose up -d
 
 # 3. Access web dashboard
-open http://localhost:8888
+open http://localhost:9999
 ```
 
 **Requirements:** Docker Engine 20.10+, Docker Compose 2.0+, 8GB RAM

@@ -190,6 +190,8 @@ Use `uv pip install -e .` in a virtual environment for editable installs:
 ### Python Environment
 - **Prefer `uv`** for all pip operations and running services
 - Use `uv pip install -e .` for editable development installs
+- **No Rosetta on Apple Silicon**: Python, venv and tools must be native arm64 (Homebrew in `/opt/homebrew`, not Intel `/usr/local`). Shell scripts use `scripts/lib/macos_arch.sh` (`is_native_python`, `is_native_venv`, `find_native_brew`, `find_working_timeout`) instead of bare `python3`/`brew`/`timeout`
+- **Native is the primary deployment; Docker is an alternative** - on macOS Docker has no GPU (MPS) access, so indexing is ~5x slower
 - Python 3.9+ required (3.11 recommended)
 
 ### Document Processing Pipeline
@@ -628,6 +630,7 @@ else:
 - `PERSONAL_LIBRARY_DOC_PATH` - Override books directory
 - `PERSONAL_LIBRARY_DB_PATH` - Override database directory
 - `PERSONAL_LIBRARY_LOGS_PATH` - Override logs directory
+- `PERSONAL_LIBRARY_OCR_LANGUAGES` - Tesseract languages for scanned PDFs (default: `eng`; e.g. `eng+hin+san`, needs `tesseract-lang`)
 
 ### MCP Server Performance Configuration
 - `MCP_WARMUP_ON_START` - Pre-initialize RAG system on server start (default: false)

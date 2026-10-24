@@ -11,6 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+source "$SCRIPT_DIR/lib/macos_arch.sh"
+
 # Use Python directly from virtual environment
 PYTHON_CMD="$PROJECT_ROOT/venv_mcp/bin/python"
 
@@ -53,6 +55,11 @@ check_venv() {
         log "Please run install.sh first"
         exit 1
     fi
+    if ! is_native_venv "$PROJECT_ROOT/venv_mcp"; then
+        log "ERROR: venv_mcp is not fully native arm64 (it needs Rosetta)"
+        log "Please re-run install.sh to recreate venv_mcp natively"
+        exit 1
+    fi
     echo "$PYTHON_CMD"
 }
 
@@ -68,12 +75,10 @@ validate_environment() {
         log "WARNING: Books directory does not exist: $PERSONAL_LIBRARY_DOC_PATH"
     else
         # Count documents in books directory (with timeout for LaunchAgent)
-        local doc_count
-        # Use timeout if available (gtimeout on macOS with coreutils, timeout on Linux)
-        if command -v gtimeout &> /dev/null; then
-            doc_count=$(gtimeout 10 find "$PERSONAL_LIBRARY_DOC_PATH" -type f \( -name "*.pdf" -o -name "*.docx" -o -name "*.doc" -o -name "*.epub" \) 2>/dev/null | wc -l || echo "0")
-        elif command -v timeout &> /dev/null; then
-            doc_count=$(timeout 10 find "$PERSONAL_LIBRARY_DOC_PATH" -type f \( -name "*.pdf" -o -name "*.docx" -o -name "*.doc" -o -name "*.epub" \) 2>/dev/null | wc -l || echo "0")
+        local doc_count timeout_cmd
+        # Use a timeout command that actually runs (an Intel-only gtimeout fails without Rosetta)
+        if timeout_cmd=$(find_working_timeout); then
+            doc_count=$("$timeout_cmd" 10 find "$PERSONAL_LIBRARY_DOC_PATH" -type f \( -name "*.pdf" -o -name "*.docx" -o -name "*.doc" -o -name "*.epub" \) 2>/dev/null | wc -l || echo "0")
         else
             # No timeout command available, run without timeout
             doc_count=$(find "$PERSONAL_LIBRARY_DOC_PATH" -type f \( -name "*.pdf" -o -name "*.docx" -o -name "*.doc" -o -name "*.epub" \) 2>/dev/null | head -100 | wc -l || echo "0")
