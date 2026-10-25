@@ -8,7 +8,12 @@ VENV_DIR="$PROJECT_ROOT/venv_mcp"
 SERVER_FILE="$PROJECT_ROOT/src/personal_doc_library/servers/mcp_complete_server.py"
 
 # Use Python from virtual environment
-PYTHON_CMD="$VENV_DIR/bin/python"
+# Force ARM64 architecture on Apple Silicon to avoid Rosetta issues
+if [[ "$(uname -m)" == "arm64" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
+    PYTHON_CMD="arch -arm64 $VENV_DIR/bin/python"
+else
+    PYTHON_CMD="$VENV_DIR/bin/python"
+fi
 
 echo "🔮 Personal Document Library MCP Server"
 echo "==============================="
@@ -78,8 +83,7 @@ fi
 # Change to project root directory
 cd "$PROJECT_ROOT"
 
-# Set Python command to use virtual environment directly
-PYTHON_CMD="$VENV_DIR/bin/python"
+# Note: PYTHON_CMD already set above with ARM64 support
 
 # Verify Python exists
 if [ ! -f "$PYTHON_CMD" ]; then
